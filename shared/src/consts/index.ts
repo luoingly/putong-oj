@@ -15,6 +15,9 @@ export enum ErrorCode {
   NotImplemented = 501,
 }
 
+export const ErrorCodeValues = Object.values(ErrorCode)
+  .filter(value => typeof value === 'number') as number[]
+
 export enum QuerySort {
   Asc = 1,
   Desc = -1,
