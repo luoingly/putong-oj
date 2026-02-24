@@ -10,7 +10,7 @@ test('News list', async (t) => {
   const res = await request
     .get('/api/news/list')
 
-  t.plan(4)
+  t.plan(3)
 
   t.is(res.status, 200)
   t.truthy(Array.isArray(res.body.list.docs))
