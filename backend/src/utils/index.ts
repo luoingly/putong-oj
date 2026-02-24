@@ -70,7 +70,7 @@ export function createEnvelopedResponse<T> (ctx: Context, data: T): void {
   const { requestId } = ctx.state
   ctx.body = <Enveloped<T>>{
     success: true,
-    code: ErrorCode.OK,
+    code: 200,
     message: 'OK',
     data,
     requestId,
