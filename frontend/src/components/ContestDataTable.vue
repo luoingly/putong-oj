@@ -62,11 +62,11 @@ const applyStatus = computed(() => {
   if (!details.value) {
     return ApplyStatus.CannotApply
   }
-  if (details.value.isIpBlocked) {
-    return ApplyStatus.IpBlocked
-  }
   if (details.value.participation !== ParticipationStatus.NotApplied) {
     return ApplyStatus.CannotApply
+  }
+  if (details.value.isIpBlocked) {
+    return ApplyStatus.IpBlocked
   }
   if (details.value.canParticipate) {
     return ApplyStatus.CanApply

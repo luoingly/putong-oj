@@ -3,7 +3,7 @@ import type { Context } from 'koa'
 import type { ZodError } from 'zod'
 import type { PaginateOption } from '../types'
 import { Buffer } from 'node:buffer'
-import { BlockList } from 'node:net'
+import { BlockList, isIPv6 } from 'node:net'
 import { md5, sha1 } from '@noble/hashes/legacy.js'
 import { ErrorCode, passwordRegex } from '@putongoj/shared'
 import { pick, pickBy } from 'lodash'
@@ -146,8 +146,8 @@ export function isIpInWhitelist (ip: string, whitelist: { cidr: string }[]): boo
   for (const entry of whitelist) {
     const slash = entry.cidr.lastIndexOf('/')
     const addr = slash >= 0 ? entry.cidr.slice(0, slash) : entry.cidr
-    const prefix = slash >= 0 ? Number(entry.cidr.slice(slash + 1)) : (addr.includes(':') ? 128 : 32)
-    const type: 'ipv4' | 'ipv6' = addr.includes(':') ? 'ipv6' : 'ipv4'
+    const prefix = slash >= 0 ? Number(entry.cidr.slice(slash + 1)) : (isIPv6(addr) ? 128 : 32)
+    const type = isIPv6(addr) ? 'ipv6' : 'ipv4'
     try {
       blockList.addSubnet(addr, prefix, type)
     } catch {
@@ -155,7 +155,7 @@ export function isIpInWhitelist (ip: string, whitelist: { cidr: string }[]): boo
     }
   }
 
-  const type: 'ipv4' | 'ipv6' = ip.includes(':') ? 'ipv6' : 'ipv4'
+  const type = isIPv6(ip) ? 'ipv6' : 'ipv4'
   return blockList.check(ip, type)
 }
 

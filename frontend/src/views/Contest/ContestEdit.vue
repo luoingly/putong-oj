@@ -370,9 +370,11 @@ onMounted(() => {
         </template>
 
         <template #empty>
-          <span class="px-2">
-            {{ t('ptoj.empty_content_desc') }}
-          </span>
+          <div class="px-2">
+            <div class="max-w-xl mx-auto text-balance text-center">
+              {{ t('ptoj.empty_ip_whitelist_desc') }}
+            </div>
+          </div>
         </template>
       </DataTable>
 

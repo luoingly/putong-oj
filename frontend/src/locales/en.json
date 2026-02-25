@@ -75,6 +75,7 @@
   "edit_discussion": "Edit Discussion",
   "email": "Email",
   "empty_content_desc": "It seemed that you have arrived at a desolate land where no data exists.",
+  "empty_ip_whitelist_desc": "The IP whitelist is currently empty, which means no IP address is allowed to access the contest. Please add CIDR entries to the whitelist to allow access from specific IP ranges.",
   "enable_ip_whitelist": "Enable IP Whitelist",
   "ended": "Ended",
   "ends_at": "Ends At",

@@ -75,6 +75,7 @@
   "edit_discussion": "编辑讨论",
   "email": "邮箱",
   "empty_content_desc": "你似乎来到了没有数据存在的荒原。",
+  "empty_ip_whitelist_desc": "IP 白名单为空，这意味着没有任何 IP 地址被允许访问比赛。请向白名单添加 CIDR 条目以允许来自特定 IP 范围的访问。",
   "enable_ip_whitelist": "启用 IP 白名单",
   "ended": "已结束",
   "ends_at": "结束时间",
