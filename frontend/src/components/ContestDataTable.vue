@@ -55,11 +55,15 @@ enum ApplyStatus {
   CanApply,
   NeedPassword,
   CannotApply,
+  IpBlocked,
 }
 
 const applyStatus = computed(() => {
   if (!details.value) {
     return ApplyStatus.CannotApply
+  }
+  if (details.value.isIpBlocked) {
+    return ApplyStatus.IpBlocked
   }
   if (details.value.participation !== ParticipationStatus.NotApplied) {
     return ApplyStatus.CannotApply
@@ -74,7 +78,7 @@ const applyStatus = computed(() => {
 })
 
 const canApply = computed(() => {
-  return applyStatus.value !== ApplyStatus.CannotApply
+  return applyStatus.value !== ApplyStatus.CannotApply && applyStatus.value !== ApplyStatus.IpBlocked
 })
 
 const canSubmit = computed(() => {
@@ -218,6 +222,9 @@ async function onSubmit () {
           />
           <label for="title">{{ t('ptoj.password') }}</label>
         </IftaLabel>
+      </div>
+      <div v-else-if="applyStatus === ApplyStatus.IpBlocked" class="text-muted-color">
+        {{ t('ptoj.participate_contest_ip_blocked') }}
       </div>
       <div v-else class="text-muted-color">
         {{ t('ptoj.participate_contest_cannot_apply') }}
