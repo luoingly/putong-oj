@@ -183,13 +183,13 @@ async function getRanklist (contest: Types.ObjectId, isJury: boolean) {
     async () => {
       const contestDoc = await Contest
         .findById(contest)
-        .select({ _id: 0, contestId: 1, endsAt: 1, scoreboardFrozenAt: 1 })
+        .select({ _id: 0, contestId: 1, endsAt: 1, scoreboardFrozenAt: 1, scoreboardUnfrozenAt: 1 })
         .lean()
       if (!contestDoc) {
         return []
       }
 
-      const { contestId, endsAt, scoreboardFrozenAt } = contestDoc
+      const { contestId, endsAt, scoreboardFrozenAt, scoreboardUnfrozenAt } = contestDoc
       const ranklistRecord: Record<string, Record<number, ContestRanklistProblem>> = {}
       const solutions = await Solution
         .find({
@@ -200,6 +200,9 @@ async function getRanklist (contest: Types.ObjectId, isJury: boolean) {
         .select({ _id: 0, pid: 1, uid: 1, judge: 1, createdAt: 1 })
         .sort({ createdAt: 1 })
         .lean()
+
+      const isFrozen = (scoreboardFrozenAt && !isJury)
+        && (!scoreboardUnfrozenAt || scoreboardUnfrozenAt > new Date())
 
       solutions.forEach((solution) => {
         const { pid: problemId, uid: username, judge: judgement, createdAt } = solution
@@ -219,7 +222,7 @@ async function getRanklist (contest: Types.ObjectId, isJury: boolean) {
           return
         }
 
-        if (!isJury && scoreboardFrozenAt && createdAt >= scoreboardFrozenAt) {
+        if (isFrozen && createdAt >= scoreboardFrozenAt) {
           // scoreboard is frozen, and the submission is after the freeze time, count it as pending
           item.pendingCount += 1
           return
