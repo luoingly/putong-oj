@@ -3,6 +3,8 @@ import type { DiscussionUpdateDto } from '../services/discussion'
 import {
   AdminCommentUpdatePayloadSchema,
   AdminDiscussionUpdatePayloadSchema,
+  AdminFileListQueryResultSchema,
+  AdminFileListQuerySchema,
   AdminGroupCreatePayloadSchema,
   AdminGroupDetailQueryResultSchema,
   AdminGroupMembersUpdatePayloadSchema,
@@ -25,10 +27,12 @@ import {
   SessionListQueryResultSchema,
   SessionRevokeOthersResultSchema,
 } from '@putongoj/shared'
+import { distributeWork } from '../jobs/helper'
 import { loadProfile } from '../middlewares/authn'
 import { contestService } from '../services/contest'
 import cryptoService from '../services/crypto'
 import discussionService from '../services/discussion'
+import fileService from '../services/file'
 import groupService from '../services/group'
 import oauthService from '../services/oauth'
 import problemService from '../services/problem'
@@ -577,6 +581,37 @@ export async function updateTag (ctx: Context) {
   }
 }
 
+export async function findFiles (ctx: Context) {
+  const query = AdminFileListQuerySchema.safeParse(ctx.request.query)
+  if (!query.success) {
+    return createZodErrorResponse(ctx, query.error)
+  }
+
+  const files = await fileService.findAdminFiles(query.data)
+  if (!files) {
+    return createErrorResponse(ctx, ErrorCode.NotFound, 'Uploader not found')
+  }
+
+  const result = AdminFileListQueryResultSchema.encode(files)
+  return createEnvelopedResponse(ctx, result)
+}
+
+export async function removeFile (ctx: Context) {
+  const profile = await loadProfile(ctx)
+  const storageKey = String(ctx.params.storageKey || '').trim()
+  if (!storageKey) {
+    return createErrorResponse(ctx, ErrorCode.BadRequest, 'Invalid storage key')
+  }
+
+  const file = await fileService.removeFile(profile, storageKey)
+  if (!file) {
+    return createErrorResponse(ctx, ErrorCode.NotFound)
+  }
+
+  ctx.auditLog.info(`<File:${file.storageKey}> deleted by <User:${profile.uid}>`)
+  return createEnvelopedResponse(ctx, null)
+}
+
 const adminController = {
   findUsers,
   getUser,
@@ -602,6 +637,8 @@ const adminController = {
   findTags,
   createTag,
   updateTag,
+  findFiles,
+  removeFile,
 } as const
 
 export default adminController

@@ -1,8 +1,6 @@
 import type { Context } from 'koa'
-import path from 'node:path'
 import { env } from 'node:process'
 import { AvatarPresetsQueryResultSchema, PublicConfigQueryResultSchema } from '@putongoj/shared'
-import fse from 'fs-extra'
 import { v4 } from 'uuid'
 import { globalConfig } from '../config'
 import redis from '../config/redis'
@@ -25,32 +23,6 @@ function parseBuildTime (): Date | null {
 
 const commitHash = env.NODE_BUILD_SHA || 'unknown'
 const buildAt = parseBuildTime()
-
-const uploadDir = path.join(__dirname, '../../public/uploads')
-
-const upload = async (ctx: Context) => {
-  const { uid } = await loadProfile(ctx)
-  if (!ctx.request.files || !ctx.request.files.image) {
-    ctx.throw(400, 'No file uploaded')
-  }
-  const file = ctx.request.files.image
-  if (Array.isArray(file)) {
-    ctx.throw(400, 'Invalid file uploaded')
-  }
-  if (!file) {
-    ctx.throw(400, 'No file uploaded')
-  }
-  const filename = path.basename(file.filepath)
-  try {
-    await fse.move(file.filepath, path.join(uploadDir, filename))
-  } catch (err: any) {
-    ctx.throw(500, `Failed to save file: ${err.message}`)
-  }
-  ctx.auditLog.info(`<File:${filename}> uploaded by <User:${uid}>`)
-  ctx.body = {
-    url: `/uploads/${filename}`,
-  }
-}
 
 const serverTime = (ctx: Context) => {
   ctx.body = {
@@ -97,7 +69,6 @@ export async function getAvatarPresets (ctx: Context) {
 }
 
 const utilsController = {
-  upload,
   serverTime,
   getPublicConfig,
   getWebSocketToken,

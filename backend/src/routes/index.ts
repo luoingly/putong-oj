@@ -5,6 +5,7 @@ import admin from './admin'
 import contest from './contest'
 import course from './course'
 import discussion from './discussion'
+import file from './file'
 import group from './group'
 import news from './news'
 import oauth from './oauth'
@@ -23,6 +24,7 @@ router.use(admin.routes(), admin.allowedMethods())
 router.use(contest.routes(), contest.allowedMethods())
 router.use(course.routes(), course.allowedMethods())
 router.use(discussion.routes(), discussion.allowedMethods())
+router.use(file.routes(), file.allowedMethods())
 router.use(group.routes(), group.allowedMethods())
 router.use(news.routes(), news.allowedMethods())
 router.use(oauth.routes(), oauth.allowedMethods())

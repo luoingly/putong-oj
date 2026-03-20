@@ -81,6 +81,13 @@ adminRouter.put('/settings/avatar-presets',
   adminController.updateAvatarPresets,
 )
 
+adminRouter.get('/files',
+  adminController.findFiles,
+)
+adminRouter.delete('/files/:storageKey',
+  adminController.removeFile,
+)
+
 adminRouter.get('/tags',
   adminController.findTags,
 )

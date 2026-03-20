@@ -1,6 +1,8 @@
 import type {
   AdminCommentUpdatePayload,
   AdminDiscussionUpdatePayload,
+  AdminFileListQuery,
+  AdminFileListQueryResult,
   AdminGroupCreatePayload,
   AdminGroupDetailQueryResult,
   AdminGroupMembersUpdatePayload,
@@ -103,4 +105,11 @@ export async function createTag (payload: AdminTagCreatePayload) {
 }
 export async function updateTag (tagId: string, payload: AdminTagUpdatePayload) {
   return instance.put<null>(`/admin/tags/${encodeURIComponent(tagId)}`, payload)
+}
+
+export async function findFiles (params: AdminFileListQuery) {
+  return instance.get<AdminFileListQueryResult>('/admin/files', { params })
+}
+export async function removeFile (storageKey: string) {
+  return instance.delete<null>(`/admin/files/${encodeURIComponent(storageKey)}`)
 }

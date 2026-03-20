@@ -1,12 +1,13 @@
 import Router from '@koa/router'
+import fileController from '../controllers/file'
 import utilsController from '../controllers/utils'
 import authnMiddleware from '../middlewares/authn'
 
 const utilsRouter = new Router()
 
 utilsRouter.post('/upload',
-  authnMiddleware.adminRequire,
-  utilsController.upload,
+  authnMiddleware.loginRequire,
+  fileController.upload,
 )
 utilsRouter.get('/servertime',
   utilsController.serverTime,
