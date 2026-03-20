@@ -6,8 +6,11 @@ import Problem from '../models/Problem'
 import User from '../models/User'
 import { passwordHash } from '../utils'
 import { deploy } from '../utils/constants'
+import { runMigrations } from './migrations'
 
 export async function databaseSetup () {
+  await runMigrations()
+
   const tasks: Promise<any>[] = []
 
   const models = {

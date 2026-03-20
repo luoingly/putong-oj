@@ -54,6 +54,7 @@ export const AdminUserDetailQueryResultSchema = z.object({
   motto: UserModelSchema.shape.motto,
   mail: UserModelSchema.shape.mail,
   school: UserModelSchema.shape.school,
+  storageQuota: UserModelSchema.shape.storageQuota,
   lastRequestId: UserModelSchema.shape.lastRequestId,
   lastVisitedAt: UserModelSchema.shape.lastVisitedAt,
   createdAt: UserModelSchema.shape.createdAt,
@@ -68,6 +69,7 @@ export const AdminUserEditPayloadSchema = z.object({
   motto: UserModelSchema.shape.motto.optional(),
   mail: UserModelSchema.shape.mail.optional(),
   school: UserModelSchema.shape.school.optional(),
+  storageQuota: UserModelSchema.shape.storageQuota.optional(),
 })
 
 export type AdminUserEditPayload = z.infer<typeof AdminUserEditPayloadSchema>

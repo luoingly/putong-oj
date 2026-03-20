@@ -2,6 +2,7 @@ import Settings from '../models/Settings'
 import { CacheKey, cacheService } from './cache'
 
 export class SettingsKey {
+  static migrationsApplied = 'migrationsApplied'
   static avatarPresets = 'avatarPresets'
 }
 
@@ -35,6 +36,15 @@ class SettingsService {
         return setting.value as T
       },
     )
+  }
+
+  public async getMigrationsApplied () {
+    const migrations = await this.get<string[]>(SettingsKey.migrationsApplied, [])
+    return new Set(migrations)
+  }
+
+  public async setMigrationsApplied (migrations: Set<string>) {
+    await this.set(SettingsKey.migrationsApplied, [ ...migrations ])
   }
 
   public async getAvatarPresets () {

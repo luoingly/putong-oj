@@ -144,6 +144,9 @@ export async function updateUser (user: UserDocument, data: Partial<UserModel>):
   if (data.pwd !== undefined) {
     user.pwd = data.pwd
   }
+  if (data.storageQuota !== undefined) {
+    user.storageQuota = data.storageQuota
+  }
 
   await user.save()
   return user

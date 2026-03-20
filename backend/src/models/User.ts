@@ -38,6 +38,11 @@ const userSchema: Schema = new mongoose.Schema({
     enum: UserPrivilegeValues,
     default: UserPrivilege.User,
   },
+  storageQuota: {
+    type: Number,
+    default: 0,
+    min: 0,
+  },
   nick: {
     type: String,
     default: '',

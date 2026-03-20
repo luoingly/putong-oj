@@ -19,6 +19,7 @@ export const UserModelSchema = z.object({
   mail: z.union([z.email(), z.literal('')]),
   school: z.string().max(30),
   gid: z.array(z.int().nonnegative()),
+  storageQuota: z.int().nonnegative(),
   submit: z.int().nonnegative(),
   solve: z.int().nonnegative(),
   lastRequestId: z.string().optional(),
