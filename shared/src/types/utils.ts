@@ -1,7 +1,7 @@
 import type { Types } from 'mongoose'
 import { z } from 'zod'
 
-export const ObjectIdSchema = z.custom<Types.ObjectId>(async (val: any) => {
+export const ObjectIdSchema = z.custom<Types.ObjectId>((val: any) => {
   let strval: string = ''
   if (typeof val === 'string') {
     strval = val
