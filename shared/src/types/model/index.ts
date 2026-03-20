@@ -1,6 +1,7 @@
 export * from './comment.js'
 export * from './contest.js'
 export * from './discussion.js'
+export * from './files.js'
 export * from './group.js'
 export * from './oauth.js'
 export * from './problem.js'
