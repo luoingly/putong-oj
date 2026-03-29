@@ -117,8 +117,12 @@ function init () {
       multiple: false,
       fieldName: 'image',
       format: (files, responseText) => {
-        const filename = files[0].name
-        const url = JSON.parse(responseText).url
+        const filename = files[0]?.name || 'file'
+        const response = JSON.parse(responseText)
+        if (!response.success) {
+          return JSON.stringify({ data: { succMap: {}, errFiles: [ filename ] } })
+        }
+        const url = response.data.url
         return JSON.stringify({ data: { succMap: { [filename]: url } } })
       },
     },
