@@ -81,6 +81,11 @@ adminRouter.put('/settings/avatar-presets',
   adminController.updateAvatarPresets,
 )
 
+adminRouter.post('/actions/scan-uploads-folder',
+  authnMiddleware.rootRequire,
+  adminController.triggerScanUploadsFolder,
+)
+
 adminRouter.get('/files',
   adminController.findFiles,
 )

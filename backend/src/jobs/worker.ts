@@ -2,6 +2,7 @@ import redis from '../config/redis'
 import logger from '../utils/logger'
 import checkSimilarity from './tasks/checkSimilarity'
 import fetchCodeforces from './tasks/fetchCodeforces'
+import scanUploadsFolder from './tasks/scanUploadsFolder'
 import updateStatistic from './tasks/updateStatistic'
 import '../config/db'
 
@@ -13,6 +14,7 @@ async function main () {
         'worker:updateStatistic',
         'worker:checkSimilarity',
         'worker:fetchCodeforces',
+        'worker:scanUploadsFolder',
         0)
       if (!blpopResult) {
         continue
@@ -31,6 +33,9 @@ async function main () {
             break
           case 'fetchCodeforces':
             await fetchCodeforces(item)
+            break
+          case 'scanUploadsFolder':
+            await scanUploadsFolder()
             break
           default:
             logger.warn(`Unknown job <${job}>`)

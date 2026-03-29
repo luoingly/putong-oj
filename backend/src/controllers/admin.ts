@@ -581,6 +581,14 @@ export async function updateTag (ctx: Context) {
   }
 }
 
+export async function triggerScanUploadsFolder (ctx: Context) {
+  const task = 'scanUploadsFolder'
+  const profile = await loadProfile(ctx)
+  await distributeWork(task, '')
+  ctx.auditLog.info(`Action <${task}> requested by <User:${profile.uid}>`)
+  return createEnvelopedResponse(ctx, null)
+}
+
 export async function findFiles (ctx: Context) {
   const query = AdminFileListQuerySchema.safeParse(ctx.request.query)
   if (!query.success) {
@@ -637,6 +645,7 @@ const adminController = {
   findTags,
   createTag,
   updateTag,
+  triggerScanUploadsFolder,
   findFiles,
   removeFile,
 } as const
