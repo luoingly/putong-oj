@@ -12,6 +12,7 @@ import Dialog from 'primevue/dialog'
 import IconField from 'primevue/iconfield'
 import IftaLabel from 'primevue/iftalabel'
 import InputIcon from 'primevue/inputicon'
+import InputNumber from 'primevue/inputnumber'
 import InputText from 'primevue/inputtext'
 import Message from 'primevue/message'
 import Select from 'primevue/select'
@@ -55,11 +56,21 @@ const editingUser = ref<AdminUserEditPayload>({})
 const connections = ref<AdminUserOAuthQueryResult>({ CJLU: null, Codeforces: null })
 const loading = ref(false)
 const saving = ref(false)
+const savingQuota = ref(false)
 const passwordDialog = ref(false)
 const newPassword = ref('')
 const confirmPassword = ref('')
 const sessions = ref<SessionInfo[]>([])
 const sessionsLoading = ref(false)
+const BYTES_PER_MB = 1024 * 1024
+
+function byteToMegabyte (byte?: number) {
+  return Number((((byte || 0) / BYTES_PER_MB)).toFixed(2))
+}
+
+function megabyteToByte (megabyte?: number) {
+  return Math.max(0, Math.round((megabyte || 0) * BYTES_PER_MB))
+}
 
 const hasChanges = computed(() => {
   if (!user.value) return false
@@ -70,6 +81,11 @@ const hasChanges = computed(() => {
     || editingUser.value.school !== user.value.school
     || editingUser.value.avatar !== user.value.avatar
 })
+const hasQuotaChanges = computed(() => {
+  if (!user.value) return false
+  return megabyteToByte(editingUser.value.storageQuota) !== user.value.storageQuota
+})
+
 const isSelf = computed(() => profile.value?.uid === user.value?.uid)
 const canOperate = computed(() => {
   if (!profile.value || !user.value) return false
@@ -86,6 +102,7 @@ function setEditingUser () {
     mail: user.value.mail,
     school: user.value.school,
     avatar: user.value.avatar,
+    storageQuota: byteToMegabyte(user.value.storageQuota),
   }
 }
 
@@ -140,6 +157,26 @@ async function saveUser () {
   saving.value = true
   const resp = await updateUser(uid.value, payload)
   saving.value = false
+
+  if (!resp.success) {
+    message.error(t('ptoj.failed_save_changes'), resp.message)
+    return
+  }
+
+  message.success(t('ptoj.successful_updated'), t('ptoj.user_updated_detail'))
+  user.value = resp.data
+  setEditingUser()
+}
+
+async function saveQuota () {
+  if (!user.value || !profile.value) return
+  if (!hasQuotaChanges.value) return
+
+  savingQuota.value = true
+  const resp = await updateUser(uid.value, {
+    storageQuota: megabyteToByte(editingUser.value.storageQuota),
+  })
+  savingQuota.value = false
 
   if (!resp.success) {
     message.error(t('ptoj.failed_save_changes'), resp.message)
@@ -497,6 +534,29 @@ onRouteParamUpdate(fetch)
             :label="t('ptoj.logout_all_sessions')" icon="pi pi-sign-out" severity="danger" outlined
             :disabled="!canOperate || sessions.length === 0" @click="confirmRevokeAllUserSessions"
           />
+        </div>
+      </div>
+
+      <div class="border-b border-surface p-6">
+        <h2 class="font-semibold mb-5 text-lg">
+          {{ t('ptoj.quota_settings') }}
+        </h2>
+
+        <div class="gap-x-4 gap-y-6 grid grid-cols-1 md:grid-cols-2">
+          <IftaLabel>
+            <InputNumber
+              id="storage-quota" v-model="editingUser.storageQuota" fluid :min="0" :max-fraction-digits="2"
+              suffix=" MB" :readonly="!canOperate"
+            />
+            <label for="storage-quota">{{ t('ptoj.storage_quota') }}</label>
+          </IftaLabel>
+
+          <div class="flex gap-2 md:col-span-2">
+            <Button
+              :label="t('ptoj.save_changes')" icon="pi pi-check" :loading="savingQuota"
+              :disabled="!canOperate || !hasQuotaChanges" @click="saveQuota"
+            />
+          </div>
         </div>
       </div>
 

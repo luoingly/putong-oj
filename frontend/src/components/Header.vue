@@ -102,6 +102,10 @@ const menuItems = computed(() => {
         label: t('ptoj.solution_management'),
         icon: 'pi pi-copy',
         route: 'SolutionManagement',
+      }, {
+        label: t('ptoj.file_management'),
+        icon: 'pi pi-folder-open',
+        route: 'FileManagement',
       } ],
     })
   }
@@ -118,6 +122,13 @@ const profileItems = computed(() => [
     },
   },
   {
+    label: t('ptoj.header_settings'),
+    icon: 'pi pi-cog',
+    command: () => {
+      router.push({ name: 'AccountSettings' })
+    },
+  },
+  {
     label: t('ptoj.header_submissions'),
     icon: 'pi pi-copy',
     command: () => {
@@ -125,10 +136,10 @@ const profileItems = computed(() => [
     },
   },
   {
-    label: t('ptoj.header_settings'),
-    icon: 'pi pi-cog',
+    label: t('ptoj.my_files'),
+    icon: 'pi pi-folder-open',
     command: () => {
-      router.push({ name: 'AccountSettings' })
+      router.push({ name: 'MyFiles' })
     },
   },
   {

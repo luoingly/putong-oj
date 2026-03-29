@@ -147,3 +147,15 @@ export function getSimilarityClassname (similarity: number) {
   if (similarity >= 85) return 'text-yellow-500 bg-yellow-400/20'
   return 'text-amber-500 bg-amber-400/20'
 }
+
+export function formatBytes (bytes: number) {
+  if (bytes < 1024) return `${bytes} B`
+  const units = [ 'KB', 'MB', 'GB', 'TB' ]
+  let value = bytes / 1024
+  let index = 0
+  while (value >= 1024 && index < units.length - 1) {
+    value /= 1024
+    index++
+  }
+  return `${value.toFixed(2)} ${units[index]}`
+}
