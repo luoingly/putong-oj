@@ -6,6 +6,7 @@ const UserManagement = () => import('@/views/Admin/UserManagement.vue')
 const UserManagementDetail = () => import('@/views/Admin/UserManagementDetail.vue')
 const SolutionManagement = () => import('@/views/Admin/SolutionManagement.vue')
 const NotificationCreate = () => import('@/views/Admin/NotificationCreate.vue')
+const FileManagement = () => import('@/views/Admin/FileManagement.vue')
 
 const adminRoutes: Array<RouteRecordRaw> = [
   {
@@ -43,6 +44,12 @@ const adminRoutes: Array<RouteRecordRaw> = [
     name: 'NotificationCreate',
     component: NotificationCreate,
     meta: { title: 'Create Notification', requiresAdmin: true },
+  },
+  {
+    path: '/admin/files',
+    name: 'FileManagement',
+    component: FileManagement,
+    meta: { title: 'File Management', requiresAdmin: true },
   },
 ]
 

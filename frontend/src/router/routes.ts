@@ -2,6 +2,7 @@ import type { RouteRecordRaw } from 'vue-router'
 import NotFound from '@/views/404.vue'
 import AccountSettings from '@/views/AccountSettings.vue'
 import Home from '@/views/Home.vue'
+import MyFiles from '@/views/MyFiles.vue'
 import MySubmissions from '@/views/MySubmissions.vue'
 import OAuthCallback from '@/views/OAuthCallback.vue'
 import Ranklist from '@/views/Ranklist.vue'
@@ -47,6 +48,12 @@ const routes: Array<RouteRecordRaw> = [
   {
     path: '/user/:uid',
     redirect: { name: 'UserProfile' },
+  },
+  {
+    path: '/files',
+    name: 'MyFiles',
+    component: MyFiles,
+    meta: { title: 'My Files', requiresLogin: true },
   },
   {
     path: '/submissions',
