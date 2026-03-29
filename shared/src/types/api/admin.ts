@@ -11,6 +11,7 @@ import {
   CommentModelSchema,
   ContestModelSchema,
   DiscussionModelSchema,
+  FileModelSchema,
   GroupModelSchema,
   OAuthModelSchema,
   ProblemModelSchema,
@@ -238,7 +239,7 @@ export const AdminFileListQueryResultSchema = PaginatedSchema(z.object({
   storageKey: z.string().min(1),
   originalName: z.string().min(1),
   sizeBytes: z.int().nonnegative(),
-  createdAt: UserModelSchema.shape.createdAt,
+  createdAt: FileModelSchema.shape.createdAt,
 }))
 
 export type AdminFileListQueryResult = z.input<typeof AdminFileListQueryResultSchema>

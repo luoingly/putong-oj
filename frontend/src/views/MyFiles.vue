@@ -104,7 +104,7 @@ onRouteQueryUpdate(fetch)
         </h1>
       </div>
 
-      <Message v-if="isAdmin && false" severity="secondary">
+      <Message v-if="isAdmin" severity="secondary">
         {{ t('ptoj.admin_quota_bypass') }}
       </Message>
 
