@@ -20,7 +20,7 @@ const zhCN = computed(() => locale.value === 'zh-CN')
 const page = computed(() => Number.parseInt(route.query.page as string) || 1)
 const pageSize = computed(() => Number.parseInt(route.query.pageSize as string) || 10)
 
-const docs = ref([] as { nid: number, title: string, status: number, create: number }[])
+const docs = ref([] as { slug: string, title: string, status: number, pin: boolean, owner: any, createdAt: string }[])
 const total = ref(0)
 const loading = ref(false)
 
@@ -31,7 +31,7 @@ async function fetch () {
   }
 
   loading.value = true
-  const resp = await api.news.find(query)
+  const resp = await api.post.find(query)
   loading.value = false
 
   docs.value = resp.data.list.docs
@@ -77,7 +77,7 @@ onRouteQueryUpdate(fetch)
           </h1>
         </div>
 
-        <RouterLink v-if="isAdmin" :to="{ name: 'newsCreate' }">
+        <RouterLink v-if="isAdmin" :to="{ name: 'postCreate' }">
           <Button icon="pi pi-plus" :label="t('ptoj.create_announcement')" />
         </RouterLink>
       </div>
@@ -90,12 +90,16 @@ onRouteQueryUpdate(fetch)
       </template>
 
       <template v-else>
-        <div v-for="doc in docs" :key="doc.nid" class="border-surface border-t p-2">
-          <RouterLink :to="{ name: 'newsInfo', params: { nid: doc.nid } }" class="block group px-4 py-3 space-y-2">
+        <div v-for="doc in docs" :key="doc.slug" class="border-surface border-t p-2">
+          <RouterLink :to="{ name: 'postInfo', params: { slug: doc.slug } }" class="block group px-4 py-3 space-y-2">
             <div class="flex gap-4 text-muted-color text-sm">
               <span class="flex gap-2 items-center">
                 <span class="pi pi-calendar" />
-                <span>{{ timePretty(doc.create, 'yyyy-MM-dd HH:mm') }}</span>
+                <span>{{ timePretty(doc.createdAt, 'yyyy-MM-dd HH:mm') }}</span>
+              </span>
+              <span v-if="doc.pin" class="flex gap-2 items-center text-primary">
+                <span class="pi pi-bookmark-fill" />
+                <span>{{ t('ptoj.pin') }}</span>
               </span>
               <span v-if="doc.status === 0" class="flex gap-2 items-center text-orange-400">
                 <span class="pi pi-eye-slash" />

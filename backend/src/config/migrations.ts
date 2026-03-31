@@ -1,3 +1,5 @@
+import News from '../models/News'
+import Post from '../models/Post'
 import User from '../models/User'
 import { settingsService } from '../services/settings'
 import logger from '../utils/logger'
@@ -16,11 +18,38 @@ async function migrateUserStorageQuota () {
   logger.info(`Migration user.storageQuota completed, modified=${result.modifiedCount}`)
 }
 
+async function migrateNewsToPost () {
+  const newsDocs = await News.find({}).lean().exec()
+  let migrated = 0
+  for (const news of newsDocs) {
+    const slug = `news-${news.nid}`
+    const exists = await Post.findOne({ slug }).lean().exec()
+    if (exists) {
+      continue
+    }
+    await new Post({
+      slug,
+      title: news.title,
+      content: news.content,
+      owner: null,
+      pin: false,
+      status: news.status,
+    }).save()
+    migrated++
+  }
+  logger.info(`Migration News→Post completed, migrated=${migrated}`)
+}
+
 const migrationTasks: MigrationTask[] = [
   {
     key: '20260320-user-storage-quota-default',
     description: 'Backfill missing user.storageQuota with 0',
     run: migrateUserStorageQuota,
+  },
+  {
+    key: '20260331-news-to-post',
+    description: 'Migrate News documents to the new Post model',
+    run: migrateNewsToPost,
   },
 ]
 

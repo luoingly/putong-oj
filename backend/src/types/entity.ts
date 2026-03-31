@@ -171,6 +171,17 @@ export interface NewsEntity extends Entity {
   create: number
 }
 
+// Post
+
+export interface PostEntity extends Entity {
+  slug: string
+  title: string
+  content: string
+  owner: Types.ObjectId | null
+  pin: boolean
+  status: number
+}
+
 // Group
 
 export interface GroupEntity extends Entity {

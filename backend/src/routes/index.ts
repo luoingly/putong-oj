@@ -9,6 +9,7 @@ import file from './file'
 import group from './group'
 import news from './news'
 import oauth from './oauth'
+import post from './post'
 import problem from './problem'
 import solution from './solution'
 import tag from './tag'
@@ -28,6 +29,7 @@ router.use(file.routes(), file.allowedMethods())
 router.use(group.routes(), group.allowedMethods())
 router.use(news.routes(), news.allowedMethods())
 router.use(oauth.routes(), oauth.allowedMethods())
+router.use(post.routes(), post.allowedMethods())
 router.use(problem.routes(), problem.allowedMethods())
 router.use(solution.routes(), solution.allowedMethods())
 router.use(tag.routes(), tag.allowedMethods())

@@ -12,6 +12,7 @@ import contestRoutes from './contest'
 import courseRoutes from './course'
 import discussionRoutes from './discussion'
 import newsRoutes from './news'
+import postRoutes from './post'
 import problemRoutes from './problem'
 import solutionRoutes from './solution'
 
@@ -23,6 +24,7 @@ const routes: Array<RouteRecordRaw> = [
     meta: { title: 'Home' },
   },
   ...newsRoutes,
+  ...postRoutes,
   ...problemRoutes,
   ...solutionRoutes,
   ...contestRoutes,

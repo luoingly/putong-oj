@@ -77,10 +77,24 @@ const course = {
     instance.delete<{ success: boolean }>(`/course/${courseId}/problem/${problemId}`),
 }
 
+const post = {
+  findOne: (slug: string) =>
+    instance.get(`/post/${slug}`),
+  find: (data: { [key: string]: any }) =>
+    instance.get('/post/list', { params: data }),
+  create: (data: { [key: string]: any }) =>
+    instance.post('/post/', data),
+  update: (slug: string, data: { [key: string]: any }) =>
+    instance.put(`/post/${slug}`, data),
+  delete: (slug: string) =>
+    instance.delete(`/post/${slug}`),
+}
+
 export default {
   ...utils,
   solution,
   problem,
   news,
+  post,
   course,
 }

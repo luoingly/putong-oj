@@ -4,6 +4,7 @@ import Course from '../src/models/Course'
 import Group from '../src/models/Group'
 import ID from '../src/models/ID'
 import News from '../src/models/News'
+import Post from '../src/models/Post'
 import Problem from '../src/models/Problem'
 import Solution from '../src/models/Solution'
 import User from '../src/models/User'
@@ -15,6 +16,7 @@ import { courseSeeds } from './seeds/course'
 import { discussionSeeds } from './seeds/discussion'
 import { groupSeeds } from './seeds/group'
 import { newsSeeds } from './seeds/news'
+import { postSeeds } from './seeds/post'
 import { problemSeeds } from './seeds/problem'
 import { solutionSeeds } from './seeds/solution'
 import { userSeeds } from './seeds/user'
@@ -42,6 +44,9 @@ async function main () {
   const newsInsert = Promise.all(
     newsSeeds.map(item => new News(item).save()),
   )
+  const postInsert = Promise.all(
+    postSeeds.map(item => new Post(item).save()),
+  )
   const problemInsert = (async () => {
     for (const problem of problemSeeds) {
       await new Problem(problem).save()
@@ -64,6 +69,7 @@ async function main () {
     courseInsert,
     groupInsert,
     newsInsert,
+    postInsert,
     problemInsert,
     solutionInsert,
     userInsert,
