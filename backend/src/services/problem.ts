@@ -232,10 +232,22 @@ export async function findCourseProblems (
   opt: PaginateOption & {
     type?: string
     content?: string
+    showReserved?: boolean
+    includeOwner?: Types.ObjectId | string | null
   },
 ): Promise<Paginated<ProblemEntityPreview & { owner: Types.ObjectId | null }>> {
-  const { page, pageSize, type, content } = opt
+  const { page, pageSize, type, content, showReserved, includeOwner } = opt
   const filters: Record<string, any>[] = []
+
+  if (!(showReserved === true)) {
+    const statusFilters: Record<string, any>[] = [ { 'problem.status': status.Available } ]
+    if (includeOwner) {
+      statusFilters.push({
+        'problem.owner': new Types.ObjectId(includeOwner.toString()),
+      })
+    }
+    filters.push({ $or: statusFilters })
+  }
 
   if (content && type) {
     switch (type) {

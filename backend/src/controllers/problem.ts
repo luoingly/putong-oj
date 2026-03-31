@@ -62,6 +62,8 @@ const findProblems = async (ctx: Context) => {
       {
         ...paginateOption,
         ...filterOption,
+        showReserved,
+        includeOwner: profile?._id ?? null,
       },
     )
   } else {
