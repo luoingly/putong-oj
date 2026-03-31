@@ -90,7 +90,7 @@ test('Non-admin user cannot list admin files', async (t) => {
 
   t.is(res.status, 200)
   t.is(res.body.success, false)
-  t.is(res.body.code, 401)
+  t.is(res.body.code, 403)
 })
 
 // ─── findFiles (admin) ─────────────────────────────────────────────────────
