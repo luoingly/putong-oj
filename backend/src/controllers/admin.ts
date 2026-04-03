@@ -6,6 +6,7 @@ import {
   AdminFileListQueryResultSchema,
   AdminFileListQuerySchema,
   AdminGroupCreatePayloadSchema,
+  AdminOverviewQueryResultSchema,
   AdminGroupDetailQueryResultSchema,
   AdminGroupMembersUpdatePayloadSchema,
   AdminNotificationCreatePayloadSchema,
@@ -27,6 +28,10 @@ import {
   SessionListQueryResultSchema,
   SessionRevokeOthersResultSchema,
 } from '@putongoj/shared'
+import Contest from '../models/Contest'
+import Problem from '../models/Problem'
+import Solution from '../models/Solution'
+import User from '../models/User'
 import { distributeWork } from '../jobs/helper'
 import { loadProfile } from '../middlewares/authn'
 import { contestService } from '../services/contest'
@@ -589,6 +594,17 @@ export async function triggerScanUploadsFolder (ctx: Context) {
   return createEnvelopedResponse(ctx, null)
 }
 
+export async function getOverview (ctx: Context) {
+  const [users, problems, solutions, contests] = await Promise.all([
+    User.countDocuments(),
+    Problem.countDocuments(),
+    Solution.countDocuments(),
+    Contest.countDocuments(),
+  ])
+  const result = AdminOverviewQueryResultSchema.parse({ users, problems, solutions, contests })
+  return createEnvelopedResponse(ctx, result)
+}
+
 export async function findFiles (ctx: Context) {
   const query = AdminFileListQuerySchema.safeParse(ctx.request.query)
   if (!query.success) {
@@ -648,6 +664,7 @@ const adminController = {
   triggerScanUploadsFolder,
   findFiles,
   removeFile,
+  getOverview,
 } as const
 
 export default adminController
