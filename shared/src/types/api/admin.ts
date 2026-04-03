@@ -243,3 +243,28 @@ export const AdminFileListQueryResultSchema = PaginatedSchema(z.object({
 }))
 
 export type AdminFileListQueryResult = z.input<typeof AdminFileListQueryResultSchema>
+
+// ─── Admin Overview ───────────────────────────────────────────────────────────
+
+export const AdminOverviewQueryResultSchema = z.object({
+  users: z.int().nonnegative(),
+  problems: z.int().nonnegative(),
+  solutions: z.int().nonnegative(),
+  contests: z.int().nonnegative(),
+})
+
+export type AdminOverviewQueryResult = z.infer<typeof AdminOverviewQueryResultSchema>
+
+// ─── Site Settings ────────────────────────────────────────────────────────────
+
+export const AdminSiteSettingsQueryResultSchema = z.object({
+  registrationEnabled: z.boolean(),
+})
+
+export type AdminSiteSettingsQueryResult = z.infer<typeof AdminSiteSettingsQueryResultSchema>
+
+export const AdminSiteSettingsUpdatePayloadSchema = z.object({
+  registrationEnabled: z.boolean().optional(),
+})
+
+export type AdminSiteSettingsUpdatePayload = z.infer<typeof AdminSiteSettingsUpdatePayloadSchema>

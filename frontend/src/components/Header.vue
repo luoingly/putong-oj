@@ -79,6 +79,10 @@ const menuItems = computed(() => {
       label: t('oj.admin'),
       icon: 'pi pi-shield',
       items: [ {
+        label: t('ptoj.overview'),
+        icon: 'pi pi-chart-bar',
+        route: 'AdminOverview',
+      }, {
         label: t('oj.create_problem'),
         icon: 'pi pi-plus',
         route: 'problemCreate',
