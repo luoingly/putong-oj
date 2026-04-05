@@ -83,7 +83,7 @@ test('Admin can add comment to announcement', async (t) => {
 
   t.is(getRes.status, 200)
   const comments = getRes.body.data.comments
-  const lastComment = comments[comments.length - 1]
+  const lastComment = comments.at(-1)
   t.is(lastComment.content, 'Admin comment on announcement')
 })
 

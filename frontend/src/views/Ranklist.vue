@@ -52,7 +52,7 @@ async function fetchGroups () {
     return
   }
   groups.value = resp.data
-  if (query.value.group && !groups.value.find(g => g.gid === query.value.group)) {
+  if (query.value.group && !groups.value.some(g => g.gid === query.value.group)) {
     onReset()
   }
 }

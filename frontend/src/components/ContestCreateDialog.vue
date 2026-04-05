@@ -18,7 +18,7 @@ const props = defineProps<{
 const visible = defineModel<boolean>('visible')
 
 const HOUR = 60 * 60 * 1000
-const currentTime = Math.floor(new Date().getTime() / HOUR) * HOUR
+const currentTime = Math.floor(Date.now() / HOUR) * HOUR
 
 const { t } = useI18n()
 const router = useRouter()

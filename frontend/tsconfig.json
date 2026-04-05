@@ -6,12 +6,11 @@
       "dom"
     ],
     "useDefineForClassFields": true,
-    "baseUrl": ".",
     "module": "esnext",
     "moduleResolution": "bundler",
     "paths": {
       "@/*": [
-        "src/*"
+        "./src/*"
       ],
       "@backend/*": [
         "../backend/src/*"

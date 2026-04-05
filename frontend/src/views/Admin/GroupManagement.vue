@@ -205,7 +205,7 @@ async function fetch () {
       return onReset()
     }
     groupId.value = id
-    if (!groups.value.find(g => g.gid === groupId.value)) {
+    if (!groups.value.some(g => g.gid === groupId.value)) {
       return onReset()
     }
     await fetchGroupDetail()

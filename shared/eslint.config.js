@@ -9,6 +9,7 @@ export default antfu({
   ],
 }, {
   rules: {
+    'e18e/prefer-static-regex': ['off'],
     'ts/consistent-type-definitions': ['error', 'type'],
     'ts/no-redeclare': 'off',
   },

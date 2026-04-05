@@ -144,7 +144,7 @@ test('Add comment to open discussion', async (t) => {
 
   t.is(getRes.status, 200)
   const comments = getRes.body.data.comments
-  const lastComment = comments[comments.length - 1]
+  const lastComment = comments.at(-1)
   t.is(lastComment.content, 'This is a test comment')
   t.is(lastComment.author.uid, user.uid)
 })
