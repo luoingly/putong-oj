@@ -8,8 +8,8 @@ import User from '../models/User'
 import { loadCourseStateOrThrow } from '../policies/course'
 import courseService from '../services/course'
 import problemService from '../services/problem'
-import { parsePaginateOption } from '../utils'
-import { ERR_INVALID_ID, ERR_NOT_FOUND, ERR_PERM_DENIED } from '../utils/constants'
+import { parsePaginateOption, toObjectRecord } from '../utils'
+import { encrypt, ERR_INVALID_ID, ERR_NOT_FOUND, ERR_PERM_DENIED } from '../utils/constants'
 
 const findCourses = async (ctx: Context) => {
   const opt = ctx.request.query
@@ -40,7 +40,7 @@ const getCourse = async (ctx: Context) => {
 }
 
 const joinCourse = async (ctx: Context) => {
-  const opt = ctx.request.body
+  const opt = toObjectRecord(ctx.request.body)
   const { course, role } = await loadCourseStateOrThrow(ctx)
   const joinCode = String(opt.joinCode ?? '').trim()
   if (!joinCode) {
@@ -61,11 +61,14 @@ const joinCourse = async (ctx: Context) => {
 }
 
 const createCourse = async (ctx: Context) => {
-  const opt = ctx.request.body
+  const opt = toObjectRecord(ctx.request.body)
   const profile = await loadProfile(ctx)
   try {
-    const course = await courseService.createCourse(
-      pick(opt, [ 'name', 'description', 'encrypt' ]))
+    const course = await courseService.createCourse({
+      name: String(opt.name ?? '').trim(),
+      description: String(opt.description ?? '').trim(),
+      encrypt: Number(opt.encrypt) === encrypt.Public ? encrypt.Public : encrypt.Private,
+    })
     const response: Pick<CourseEntity, 'courseId'>
       = { courseId: course.courseId }
     ctx.auditLog.info(`<Course:${course.courseId}> created by <User:${profile.uid}>`)
@@ -85,12 +88,19 @@ const updateCourse = async (ctx: Context) => {
     return ctx.throw(...ERR_PERM_DENIED)
   }
 
-  const opt = ctx.request.body
+  const opt = toObjectRecord(ctx.request.body)
   const { courseId } = course
   const profile = await loadProfile(ctx)
   try {
-    const course = await courseService.updateCourse(courseId,
-      pick(opt, [ 'name', 'description', 'encrypt', 'joinCode' ]))
+    const course = await courseService.updateCourse(
+      courseId,
+      {
+        name: String(opt.name ?? '').trim(),
+        description: String(opt.description ?? '').trim(),
+        encrypt: Number(opt.encrypt) === encrypt.Public ? encrypt.Public : encrypt.Private,
+        joinCode: String(opt.joinCode ?? '').trim(),
+      },
+    )
     const response: { success: boolean } = { success: !!course }
     ctx.auditLog.info(`<Course:${courseId}> updated by <User:${profile.uid}>`)
     ctx.body = response
@@ -144,8 +154,10 @@ const updateCourseMember = async (ctx: Context) => {
   }
 
   const { userId } = ctx.params
-  const { role: newRole } = ctx.request.body
-  if (!userId || !newRole) {
+  const body = toObjectRecord(ctx.request.body)
+  const hasRole = body.role != null
+  const newRole = toObjectRecord(body.role) as Record<string, boolean>
+  if (!userId || !hasRole) {
     return ctx.throw(400, 'Missing uid or role')
   }
   const user = await User.findOne({ uid: userId })
@@ -176,7 +188,14 @@ const updateCourseMember = async (ctx: Context) => {
   const result = await courseService.updateCourseMember(
     course._id,
     user._id,
-    newRole as CourseRole,
+    {
+      basic: newRole.basic,
+      viewTestcase: newRole.viewTestcase,
+      viewSolution: newRole.viewSolution,
+      manageProblem: newRole.manageProblem,
+      manageContest: newRole.manageContest,
+      manageCourse: newRole.manageCourse,
+    },
   )
   ctx.auditLog.info(`<Course:${course.courseId}> member <User:${userId}> updated by <User:${profile.uid}>`)
   const response: { success: boolean } = { success: result }
@@ -206,7 +225,8 @@ const removeCourseMember = async (ctx: Context) => {
 
 const addCourseProblems = async (ctx: Context) => {
   const { course } = await loadCourseStateOrThrow(ctx)
-  const { problemIds } = ctx.request.body
+  const body = toObjectRecord(ctx.request.body)
+  const problemIds = body.problemIds
   if (!Array.isArray(problemIds) || problemIds.length === 0) {
     return ctx.throw(400, 'problemIds must be a non-empty array')
   }
@@ -231,7 +251,8 @@ const addCourseProblems = async (ctx: Context) => {
 
 const moveCourseProblem = async (ctx: Context) => {
   const { course } = await loadCourseStateOrThrow(ctx)
-  const { beforePos = 1 } = ctx.request.body
+  const body = toObjectRecord(ctx.request.body)
+  const beforePos = Number(body.beforePos ?? 1)
   const problemId = ctx.params.problemId
   const problem = await problemService.getProblem(problemId)
   if (!problem) {

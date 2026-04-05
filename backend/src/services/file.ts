@@ -1,7 +1,7 @@
 import type { AdminFileListQuery, FileListQuery, FileModel } from '@putongoj/shared'
 import type { Types } from 'mongoose'
-import type { QueryFilter } from 'src/types/mongo'
 import type { UserDocument } from '../models/User'
+import type { QueryFilter } from '../types/mongo'
 import path from 'node:path'
 import fse from 'fs-extra'
 import Files from '../models/Files'

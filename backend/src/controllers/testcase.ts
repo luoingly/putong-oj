@@ -10,7 +10,7 @@ import { v4 as uuid, validate } from 'uuid'
 import { loadProfile } from '../middlewares/authn'
 import { loadProblemOrThrow } from '../policies/problem'
 import courseService from '../services/course'
-import { createEnvelopedResponse } from '../utils'
+import { createEnvelopedResponse, toObjectRecord } from '../utils'
 import { ERR_INVALID_ID, ERR_PERM_DENIED } from '../utils/constants'
 
 export async function findTestcases (ctx: Context) {
@@ -111,8 +111,9 @@ export async function createTestcase (ctx: Context) {
   const { pid } = problem
   const { uid } = profile
 
-  const testin = ctx.request.body.in || ''
-  const testout = ctx.request.body.out || ''
+  const body = toObjectRecord(ctx.request.body)
+  const testin = String(body.in || '')
+  const testout = String(body.out || '')
 
   if (!testin && !testout) {
     ctx.throw(400, 'Cannot create testcase without both input and output')

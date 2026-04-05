@@ -1,7 +1,7 @@
 import type { Context } from 'koa'
 import { loadProfile } from '../middlewares/authn'
 import News from '../models/News'
-import { only } from '../utils'
+import { only, toObjectRecord } from '../utils'
 import { status } from '../utils/constants'
 
 /**
@@ -54,7 +54,7 @@ const findOne = async (ctx: Context) => {
 
 // 新建一条消息
 const create = async (ctx: Context) => {
-  const opt = ctx.request.body
+  const opt = toObjectRecord(ctx.request.body)
   const { uid } = await loadProfile(ctx)
   const news = new News(Object.assign(
     only(opt, 'title content'),
@@ -77,7 +77,7 @@ const create = async (ctx: Context) => {
 
 // 更新一条消息
 const update = async (ctx: Context) => {
-  const opt = ctx.request.body
+  const opt = toObjectRecord(ctx.request.body)
   const news = ctx.state.news
   const { uid } = await loadProfile(ctx)
   const fields = [ 'title', 'content', 'status' ]

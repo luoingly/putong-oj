@@ -159,6 +159,17 @@ export function isIpInWhitelist (ip: string, whitelist: { cidr: string }[]): boo
   return blockList.check(ip, type)
 }
 
+/**
+ * A temporary helper function to convert an unknown value to a record,
+ * returning an empty object if the value is not a plain object.
+ */
+export function toObjectRecord (value: unknown): Record<string, unknown> {
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    return value as Record<string, unknown>
+  }
+  return {}
+}
+
 export default {
   parsePaginateOption,
   passwordHashBuffer,

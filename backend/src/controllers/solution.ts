@@ -20,7 +20,7 @@ import Solution from '../models/Solution'
 import { loadContestState } from '../policies/contest'
 import { loadCourseStateOrThrow } from '../policies/course'
 import { loadProblemState } from '../policies/problem'
-import { createEnvelopedResponse, createErrorResponse, createZodErrorResponse } from '../utils'
+import { createEnvelopedResponse, createErrorResponse, createZodErrorResponse, toObjectRecord } from '../utils'
 
 export async function findOne (ctx: Context) {
   const opt = Number.parseInt(ctx.params.sid, 10)
@@ -180,7 +180,7 @@ const create = async (ctx: Context) => {
 
 async function updateSolution (ctx: Context) {
   const profile = await loadProfile(ctx)
-  const opt = ctx.request.body
+  const opt = toObjectRecord(ctx.request.body)
 
   const sid = Number(ctx.params.sid)
   if (!Number.isInteger(sid) || sid <= 0) {
