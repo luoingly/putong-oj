@@ -71,7 +71,7 @@ function normalizeAllowedLanguages (languages: Language[] | null | undefined, en
 
 function onIpWhitelistAddEntry () {
   ipWhitelist.value = [ ...ipWhitelist.value, makeIpEntry() ]
-  ipWhitelistEditingRows.value = [ ...ipWhitelistEditingRows.value, ipWhitelist.value[ipWhitelist.value.length - 1] ]
+  ipWhitelistEditingRows.value = [ ...ipWhitelistEditingRows.value, ipWhitelist.value.at(-1) ]
 }
 
 const basicInfoDirty = computed(() => {

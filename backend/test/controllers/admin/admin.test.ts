@@ -343,7 +343,7 @@ test.serial('Setup: add a comment to use in admin comment tests', async (t) => {
   t.is(disc.status, 200)
   const comments = disc.body.data.comments
   t.true(comments.length > 0)
-  createdCommentId = comments[comments.length - 1].commentId
+  createdCommentId = comments.at(-1).commentId
   t.truthy(createdCommentId)
 })
 

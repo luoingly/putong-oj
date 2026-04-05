@@ -187,7 +187,7 @@ watch(authnDialogVisible, (newValue) => {
     class="max-w-md mx-6 w-full" @hide="closeModal"
   >
     <template #header>
-      <div class="font-semibold pl-[35px] text-center text-xl w-full">
+      <div class="font-semibold pl-10 text-center text-xl w-full">
         {{ isLogin ? t('ptoj.login') : t('ptoj.register') }}
       </div>
     </template>

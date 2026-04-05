@@ -162,7 +162,7 @@ function buildDistributionBuckets (
   }
 
   const min = values[0]._id
-  const max = values[values.length - 1]._id
+  const max = values.at(-1)!._id
   const width = Math.max(1, Math.ceil((max - min + 1) / bucketCount))
 
   const buckets = Array.from({ length: bucketCount }, (_, index) => ({

@@ -15,15 +15,13 @@ module.exports = antfu(
       '@stylistic': stylistic,
     },
     rules: {
-      // Stylistic rules
-      'style/max-statements-per-line': [ 'error', { max: 3 } ],
-      'style/brace-style': [ 'error', '1tbs', { allowSingleLine: true } ],
-      'style/space-before-function-paren': [ 'error', 'always' ],
-      'style/array-bracket-spacing': [ 'error', 'always' ],
-
-      // Other rules
-      'unused-imports/no-unused-vars': [ 'warn' ],
       'antfu/if-newline': [ 'off' ],
+            'e18e/prefer-static-regex': ['off'],
+                  'style/array-bracket-spacing': [ 'error', 'always' ],
+                  'style/brace-style': [ 'error', '1tbs', { allowSingleLine: true } ],
+      'style/max-statements-per-line': [ 'error', { max: 3 } ],
+      'style/space-before-function-paren': [ 'error', 'always' ],
+      'unused-imports/no-unused-vars': [ 'warn' ],
       'vue/static-class-names-order': [ 'warn' ],
     },
   },
