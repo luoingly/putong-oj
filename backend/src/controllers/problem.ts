@@ -25,8 +25,43 @@ import problemService from '../services/problem'
 import solutionService from '../services/solution'
 import tagService from '../services/tag'
 import { getUser } from '../services/user'
-import { createEnvelopedResponse, createZodErrorResponse, parsePaginateOption } from '../utils'
-import { ERR_PERM_DENIED } from '../utils/constants'
+import { createEnvelopedResponse, createZodErrorResponse, parsePaginateOption, toObjectRecord } from '../utils'
+import { ERR_PERM_DENIED, problemType, status } from '../utils/constants'
+
+/*
+ * Some temporary helper functions, to be removed after use zod schema for request body validation.
+ */
+
+function toNumberOrDefault (value: unknown, fallback: number): number {
+  const n = Number(value)
+  return Number.isFinite(n) ? n : fallback
+}
+
+function toStringOrDefault (value: unknown, fallback = ''): string {
+  return typeof value === 'string' ? value : fallback
+}
+
+function toProblemStatus (
+  value: unknown,
+  fallback: typeof status[keyof typeof status],
+): typeof status[keyof typeof status] {
+  const parsed = Number(value)
+  return (parsed === status.Reserve || parsed === status.Available)
+    ? parsed
+    : fallback
+}
+
+function toProblemType (
+  value: unknown,
+  fallback: typeof problemType[keyof typeof problemType],
+): typeof problemType[keyof typeof problemType] {
+  const parsed = Number(value)
+  return (parsed === problemType.Traditional
+    || parsed === problemType.Interaction
+    || parsed === problemType.SpecialJudge)
+    ? parsed
+    : fallback
+}
 
 const findProblems = async (ctx: Context) => {
   const opt = ctx.request.query
@@ -156,14 +191,17 @@ const getProblem = async (ctx: Context) => {
 }
 
 const createProblem = async (ctx: Context) => {
-  const opt = ctx.request.body
+  const opt = toObjectRecord(ctx.request.body)
   const profile = await loadProfile(ctx)
+  const courseInput = (typeof opt.course === 'string' || typeof opt.course === 'number')
+    ? opt.course
+    : undefined
   const hasPermission = async (): Promise<boolean> => {
     if (profile.isAdmin) {
       return true
     }
-    if (opt.course) {
-      const { role } = await loadCourseStateOrThrow(ctx, opt.course)
+    if (courseInput != null) {
+      const { role } = await loadCourseStateOrThrow(ctx, courseInput)
       return role.manageProblem
     }
     return false
@@ -174,14 +212,24 @@ const createProblem = async (ctx: Context) => {
 
   const owner = profile._id
   let course: WithId<CourseEntity> | undefined
-  if (opt.course) {
-    course = (await loadCourseStateOrThrow(ctx, opt.course)).course
+  if (courseInput != null) {
+    course = (await loadCourseStateOrThrow(ctx, courseInput)).course
   }
 
   try {
     const problem = await problemService.createProblem({
-      ...pick(opt, [ 'title', 'time', 'memory', 'status', 'description',
-        'input', 'output', 'in', 'out', 'hint', 'type', 'code' ]),
+      title: toStringOrDefault(opt.title),
+      time: toNumberOrDefault(opt.time, 1000),
+      memory: toNumberOrDefault(opt.memory, 32768),
+      status: toProblemStatus(opt.status, status.Reserve),
+      description: toStringOrDefault(opt.description),
+      input: toStringOrDefault(opt.input),
+      output: toStringOrDefault(opt.output),
+      in: toStringOrDefault(opt.in),
+      out: toStringOrDefault(opt.out),
+      hint: toStringOrDefault(opt.hint),
+      type: toProblemType(opt.type, problemType.Traditional),
+      code: toStringOrDefault(opt.code),
       owner,
     })
     if (course) {
@@ -201,7 +249,7 @@ const createProblem = async (ctx: Context) => {
 }
 
 const updateProblem = async (ctx: Context) => {
-  const opt = ctx.request.body
+  const opt = toObjectRecord(ctx.request.body)
   const problem = await loadProblemOrThrow(ctx)
   const profile = await loadProfile(ctx)
   let canManage = profile?.isAdmin ?? false
@@ -219,8 +267,18 @@ const updateProblem = async (ctx: Context) => {
   const uid = profile.uid
   try {
     const problem = await problemService.updateProblem(pid, {
-      ...pick(opt, [ 'title', 'time', 'memory', 'status', 'description',
-        'input', 'output', 'in', 'out', 'hint', 'type', 'code' ]),
+      title: typeof opt.title === 'string' ? opt.title : undefined,
+      time: Number.isFinite(Number(opt.time)) ? Number(opt.time) : undefined,
+      memory: Number.isFinite(Number(opt.memory)) ? Number(opt.memory) : undefined,
+      status: opt.status == null ? undefined : toProblemStatus(opt.status, status.Reserve),
+      description: typeof opt.description === 'string' ? opt.description : undefined,
+      input: typeof opt.input === 'string' ? opt.input : undefined,
+      output: typeof opt.output === 'string' ? opt.output : undefined,
+      in: typeof opt.in === 'string' ? opt.in : undefined,
+      out: typeof opt.out === 'string' ? opt.out : undefined,
+      hint: typeof opt.hint === 'string' ? opt.hint : undefined,
+      type: opt.type == null ? undefined : toProblemType(opt.type, problemType.Traditional),
+      code: typeof opt.code === 'string' ? opt.code : undefined,
       tags: Array.isArray(opt.tags)
         ? await tagService.getTagObjectIds(
             opt.tags.map((id: any) => Number(id)).filter((id: number) => Number.isInteger(id) && id > 0),
