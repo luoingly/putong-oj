@@ -1,5 +1,6 @@
 import type { Context } from 'koa'
 import type { UserDocument } from '../models/User'
+import Router from '@koa/router'
 import {
   ErrorCode,
   JudgeStatus,
@@ -13,7 +14,8 @@ import {
   UserSuggestQuerySchema,
 } from '@putongoj/shared'
 import difference from 'lodash/difference'
-import { loadProfile } from '../middlewares/authn'
+import { adminRequire, loadProfile, loginRequire } from '../middlewares/authn'
+import { dataExportLimit } from '../middlewares/ratelimit'
 import Group from '../models/Group'
 import Solution from '../models/Solution'
 import userService from '../services/user'
@@ -114,12 +116,16 @@ export async function getAllUserItems (ctx: Context) {
   return createEnvelopedResponse(ctx, result)
 }
 
-const userController = {
-  findRanklist,
-  exportRanklist,
-  getUser,
-  suggestUsers,
-  getAllUserItems,
-} as const
+function registerUserHandlers (router: Router) {
+  const userRouter = new Router({ prefix: '/users' })
 
-export default userController
+  userRouter.get('/items', adminRequire, getAllUserItems)
+  userRouter.get('/suggest', loginRequire, suggestUsers)
+  userRouter.get('/ranklist', findRanklist)
+  userRouter.get('/ranklist/export', loginRequire, dataExportLimit, exportRanklist)
+  userRouter.get('/:uid', getUser)
+
+  router.use(userRouter.routes(), userRouter.allowedMethods())
+}
+
+export default registerUserHandlers

@@ -1,5 +1,6 @@
 import type { Context } from 'koa'
-import { loadProfile } from '../middlewares/authn'
+import Router from '@koa/router'
+import { adminRequire, loadProfile, rootRequire } from '../middlewares/authn'
 import News from '../models/News'
 import { only, toObjectRecord } from '../utils'
 import { status } from '../utils/constants'
@@ -111,13 +112,16 @@ const del = async (ctx: Context) => {
   ctx.body = {}
 }
 
-const newsController = {
-  preload,
-  find,
-  findOne,
-  create,
-  update,
-  del,
-} as const
+function registerNewsHandlers (router: Router) {
+  const newsRouter = new Router({ prefix: '/news' })
 
-export default newsController
+  newsRouter.get('/list', find)
+  newsRouter.get('/:nid', preload, findOne)
+  newsRouter.post('/', adminRequire, create)
+  newsRouter.put('/:nid', adminRequire, preload, update)
+  newsRouter.del('/:nid', rootRequire, del)
+
+  router.use(newsRouter.routes(), newsRouter.allowedMethods())
+}
+
+export default registerNewsHandlers

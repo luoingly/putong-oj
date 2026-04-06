@@ -4,6 +4,7 @@ import type { Types } from 'mongoose'
 import type { DiscussionQueryFilters } from '../services/discussion'
 import type { WithId } from '../types'
 import type { CourseEntity, ProblemEntity, ProblemEntityItem, ProblemEntityPreview, ProblemEntityView } from '../types/entity'
+import Router from '@koa/router'
 import {
   DiscussionListQueryResultSchema,
   DiscussionListQuerySchema,
@@ -13,7 +14,7 @@ import {
   ProblemStatisticsQueryResultSchema,
 } from '@putongoj/shared'
 import { pick } from 'lodash'
-import { loadProfile } from '../middlewares/authn'
+import { loadProfile, loginRequire, rootRequire } from '../middlewares/authn'
 import Solution from '../models/Solution'
 import User from '../models/User'
 import { loadCourseStateOrThrow } from '../policies/course'
@@ -382,16 +383,23 @@ export async function findProblemDiscussions (ctx: Context) {
   return createEnvelopedResponse(ctx, result)
 }
 
-const problemController = {
-  findProblems,
-  findProblemItems,
-  getProblem,
-  createProblem,
-  updateProblem,
-  removeProblem,
-  getStatistics,
-  findSolutions,
-  findProblemDiscussions,
-} as const
+function registerProblemHandlers (router: Router) {
+  const problemRouter = new Router({ prefix: '/problem' })
 
-export default problemController
+  problemRouter.get('/', findProblems)
+  problemRouter.get('/items', loginRequire, findProblemItems)
+  problemRouter.post('/', loginRequire, createProblem)
+
+  problemRouter.get('/:pid', getProblem)
+  problemRouter.put('/:pid', loginRequire, updateProblem)
+  problemRouter.del('/:pid', rootRequire, removeProblem)
+
+  problemRouter.get('/:pid/statistics', loginRequire, getStatistics)
+  problemRouter.get('/:pid/solutions', loginRequire, findSolutions)
+
+  problemRouter.get('/:pid/discussions', findProblemDiscussions)
+
+  router.use(problemRouter.routes(), problemRouter.allowedMethods())
+}
+
+export default registerProblemHandlers

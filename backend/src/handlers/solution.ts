@@ -4,6 +4,7 @@ import type { CourseDocument } from '../models/Course'
 import type { ProblemState } from '../policies/problem'
 import { Buffer } from 'node:buffer'
 import path from 'node:path'
+import Router from '@koa/router'
 import {
   ErrorCode,
   JudgeStatus,
@@ -13,7 +14,8 @@ import {
 import fse from 'fs-extra'
 import { pick } from 'lodash'
 import redis from '../config/redis'
-import { loadProfile } from '../middlewares/authn'
+import { loadProfile, loginRequire, rootRequire } from '../middlewares/authn'
+import { solutionCreateLimit } from '../middlewares/ratelimit'
 import Contest from '../models/Contest'
 import Problem from '../models/Problem'
 import Solution from '../models/Solution'
@@ -256,10 +258,14 @@ async function updateSolution (ctx: Context) {
   return createEnvelopedResponse(ctx, solution)
 }
 
-const solutionController = {
-  findOne,
-  create,
-  updateSolution,
-} as const
+function registerSolutionHandlers (router: Router) {
+  const solutionRouter = new Router({ prefix: '/status' })
 
-export default solutionController
+  solutionRouter.get('/:sid', loginRequire, findOne)
+  solutionRouter.put('/:sid', rootRequire, updateSolution)
+  solutionRouter.post('/', loginRequire, solutionCreateLimit, create)
+
+  router.use(solutionRouter.routes(), solutionRouter.allowedMethods())
+}
+
+export default registerSolutionHandlers

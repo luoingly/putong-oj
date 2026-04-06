@@ -1,6 +1,7 @@
 import type { Context } from 'koa'
+import Router from '@koa/router'
 import { ErrorCode, FileListQueryResultSchema, FileListQuerySchema, FileUploadResultSchema } from '@putongoj/shared'
-import { loadProfile } from '../middlewares/authn'
+import { loadProfile, loginRequire } from '../middlewares/authn'
 import fileService from '../services/file'
 import { createEnvelopedResponse, createErrorResponse, createZodErrorResponse } from '../utils'
 
@@ -66,10 +67,15 @@ export async function removeFile (ctx: Context) {
   return createEnvelopedResponse(ctx, null)
 }
 
-const fileController = {
-  upload,
-  findFiles,
-  removeFile,
-} as const
+function registerFileHandlers (router: Router) {
+  router.post('/upload', loginRequire, upload)
 
-export default fileController
+  const fileRouter = new Router({ prefix: '/files' })
+
+  fileRouter.get('/', loginRequire, findFiles)
+  fileRouter.delete('/:storageKey', loginRequire, removeFile)
+
+  router.use(fileRouter.routes(), fileRouter.allowedMethods())
+}
+
+export default registerFileHandlers
