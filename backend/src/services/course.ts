@@ -196,11 +196,7 @@ export async function getUserRole (
       if (userPerm) {
         role = Object.assign(role, userPerm.role)
       } else if (course.encrypt === encrypt.Public) {
-        await CourseMember.findOneAndUpdate(
-          { user: profile._id, course: course._id },
-          { user: profile._id, course: course._id, role: { ...courseRoleNone, basic: true } },
-          { upsert: true },
-        ).catch(() => {})
+        await updateCourseMember(course._id, profile._id, { ...courseRoleNone, basic: true })
       }
     }
   }
@@ -296,19 +292,10 @@ export async function hasProblemRole (
   problem: Types.ObjectId | string,
   role: keyof CourseRole,
 ): Promise<boolean> {
-  const aggregationPipeline: PipelineStage[] = [
+  const aggregationPipeline = [
     {
       $match: { problem: new mongoose.Types.ObjectId(problem.toString()) },
     },
-    {
-      $lookup: {
-        from: 'Course',
-        localField: 'course',
-        foreignField: '_id',
-        as: 'courseDoc',
-      },
-    },
-    { $unwind: '$courseDoc' },
     {
       $lookup: {
         from: 'CourseMember',
@@ -331,14 +318,11 @@ export async function hasProblemRole (
     },
     {
       $match: {
-        $or: [
-          { 'memberships.0': { $exists: true } },
-          ...(role === 'basic' ? [ { 'courseDoc.encrypt': encrypt.Public } ] : []),
-        ],
+        'memberships.0': { $exists: true },
       },
     },
     { $limit: 1 },
-  ]
+  ] as PipelineStage[]
 
   const result = await CourseProblem.aggregate(aggregationPipeline).exec()
   return result.length > 0
