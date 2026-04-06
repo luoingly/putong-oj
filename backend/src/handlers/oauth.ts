@@ -98,7 +98,7 @@ export async function handleOAuthCallback (ctx: Context) {
 
     ctx.auditLog.info(`<User:${user.uid}> logged in via ${provider} OAuth`)
   } else {
-    ctx.throw(400, 'Unknown OAuth action')
+    return createErrorResponse(ctx, ErrorCode.BadRequest, 'Invalid OAuth action')
   }
   const updatedConnection = await oauthService
     .upsertOAuthConnection(user._id, connection)

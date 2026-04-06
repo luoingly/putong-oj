@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import type { ErrorEnveloped, OAuthAction } from '@putongoj/shared'
-import { ErrorCode, OAuthProvider, passwordRegex } from '@putongoj/shared'
+import type { ErrorEnveloped } from '@putongoj/shared'
+import { ErrorCode, OAuthAction, OAuthProvider, passwordRegex } from '@putongoj/shared'
 import { storeToRefs } from 'pinia'
 import Button from 'primevue/button'
 import Dialog from 'primevue/dialog'
@@ -167,7 +167,7 @@ function closeModal () {
 }
 
 async function handleOAuthLogin (provider: OAuthProvider) {
-  const resp = await generateOAuthUrl(provider, { action: 'login' as OAuthAction })
+  const resp = await generateOAuthUrl(provider, { action: OAuthAction.LOGIN })
   if (!resp.success) {
     handleAuthError(resp)
     return
