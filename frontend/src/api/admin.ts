@@ -8,6 +8,7 @@ import type {
   AdminGroupMembersUpdatePayload,
   AdminGroupUpdatePayload,
   AdminNotificationCreatePayload,
+  AdminOverviewQueryResult,
   AdminSolutionListExportQuery,
   AdminSolutionListExportQueryResult,
   AdminSolutionListQuery,
@@ -112,4 +113,8 @@ export async function findFiles (params: AdminFileListQuery) {
 }
 export async function removeFile (storageKey: string) {
   return instance.delete<null>(`/admin/files/${encodeURIComponent(storageKey)}`)
+}
+
+export async function getOverview () {
+  return instance.get<AdminOverviewQueryResult>('/admin/overview')
 }

@@ -9,6 +9,10 @@ const adminRouter = new Router({
 
 adminRouter.use(authnMiddleware.adminRequire)
 
+adminRouter.get('/overview',
+  adminController.getOverview,
+)
+
 adminRouter.get('/users',
   adminController.findUsers,
 )
