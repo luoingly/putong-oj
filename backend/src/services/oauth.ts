@@ -13,8 +13,6 @@ import OAuth from '../models/OAuth'
 const DEFAULT_TIMEOUT = 5000
 const DEFAULT_STATE_TTL = 600
 
-export const toUserView = OAuth.toUserView
-
 export interface OAuthClientConfig {
   clientId: string
   clientSecret: string
@@ -392,7 +390,6 @@ export async function removeOAuthConnection (
 }
 
 const oauthService = {
-  toUserView,
   generateOAuthUrl,
   handleOAuthCallback,
   findUserByOAuthConnection,

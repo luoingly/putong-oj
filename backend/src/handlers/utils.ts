@@ -42,8 +42,8 @@ export async function getPublicConfig (ctx: Context) {
     },
     apiPublicKey,
     oauthEnabled: {
-      CJLU: oauthConfigs.CJLU.enabled,
-      Codeforces: oauthConfigs.Codeforces.enabled,
+      cjlu: oauthConfigs.cjlu.enabled,
+      codeforces: oauthConfigs.codeforces.enabled,
     },
     helpDocURL,
     umamiAnalytics: umamiAnalytics.websiteId

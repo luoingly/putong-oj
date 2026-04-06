@@ -21,10 +21,10 @@ import type {
   AdminUserListQuery,
   AdminUserListQueryResult,
   AdminUserOAuthQueryResult,
+  OAuthProvider,
   SessionListQueryResult,
   SessionRevokeOthersResult,
 } from '@putongoj/shared'
-import { OAuthProvider } from '@putongoj/shared'
 import { instanceSafe as instance } from './instance'
 
 export async function findUsers (params: AdminUserListQuery) {
@@ -43,11 +43,7 @@ export async function getUserOAuthConnections (uid: string) {
   return instance.get<AdminUserOAuthQueryResult>(`/admin/users/${encodeURIComponent(uid)}/oauth`)
 }
 export async function removeUserOAuthConnection (uid: string, provider: OAuthProvider) {
-  const providerMap: Record<OAuthProvider, string> = {
-    [OAuthProvider.CJLU]: 'cjlu',
-    [OAuthProvider.Codeforces]: 'codeforces',
-  }
-  return instance.delete<null>(`/admin/users/${encodeURIComponent(uid)}/oauth/${providerMap[provider]}`)
+  return instance.delete<null>(`/admin/users/${encodeURIComponent(uid)}/oauth/${provider}`)
 }
 
 export async function findSolutions (params: AdminSolutionListQuery) {

@@ -32,16 +32,14 @@ export const UserPrivilegeValues = Object.values(UserPrivilege)
   .filter(value => typeof value === 'number') as number[]
 
 export enum OAuthProvider {
-  CJLU = 'CJLU',
-  Codeforces = 'Codeforces',
+  CJLU = 'cjlu',
+  Codeforces = 'codeforces',
 }
 
-export const OAuthAction = {
-  LOGIN: 'login',
-  CONNECT: 'connect',
-} as const
-
-export type OAuthAction = typeof OAuthAction[keyof typeof OAuthAction]
+export enum OAuthAction {
+  LOGIN = 'login',
+  CONNECT = 'connect',
+}
 
 export enum JudgeStatus {
   Pending = 0,

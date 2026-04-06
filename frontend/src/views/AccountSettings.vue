@@ -1,10 +1,7 @@
 <script setup lang="ts">
-import type {
-  AccountEditPayload,
-  AccountProfileQueryResult,
-} from '@putongoj/shared'
+import type { AccountEditPayload, AccountProfileQueryResult, OAuthConnectionUserView } from '@putongoj/shared'
 import type { SessionInfo } from '@/types'
-import { ErrorCode, OAuthAction, passwordRegex } from '@putongoj/shared'
+import { ErrorCode, OAuthAction, OAuthProvider, passwordRegex } from '@putongoj/shared'
 import { storeToRefs } from 'pinia'
 import Button from 'primevue/button'
 import Dialog from 'primevue/dialog'
@@ -25,11 +22,6 @@ import { encryptData } from '@/utils/crypto'
 import { formatRelativeTime } from '@/utils/format'
 import { useMessage } from '@/utils/message'
 
-interface OAuthConnection {
-  displayName: string
-  providerId: string
-}
-
 const { t, locale } = useI18n()
 const router = useRouter()
 const confirm = useConfirm()
@@ -39,7 +31,7 @@ const { isAdmin } = storeToRefs(sessionStore)
 
 const profile = ref<AccountProfileQueryResult | null>(null)
 const editingProfile = ref<AccountEditPayload>({})
-const connections = ref<Record<string, OAuthConnection | null>>({})
+const connections = ref<Partial<Record<OAuthProvider, OAuthConnectionUserView | null>>>({})
 const loading = ref(false)
 const saving = ref(false)
 const passwordDialog = ref(false)
@@ -110,7 +102,12 @@ async function fetch () {
     return
   }
 
-  connections.value = oauthResp
+  if (!oauthResp.success) {
+    message.error(t('ptoj.failed_load_connect_accounts'), oauthResp.message)
+    return
+  }
+
+  connections.value = oauthResp.data
   profile.value = profileResp.data
   if (presetsResp.success) {
     avatarPresets.value = presetsResp.data
@@ -187,9 +184,13 @@ function openPasswordDialog () {
   confirmPassword.value = ''
 }
 
-async function connectOAuth (provider: string) {
-  const resp = await generateOAuthUrl(provider.toLowerCase() as any, { action: OAuthAction.CONNECT })
-  window.open(resp.url, '_self', 'noopener,noreferrer')
+async function connectOAuth (provider: OAuthProvider) {
+  const resp = await generateOAuthUrl(provider, { action: OAuthAction.CONNECT })
+  if (!resp.success || !resp.data?.url) {
+    message.error(t('ptoj.failed_load_connect_accounts'), resp.message)
+    return
+  }
+  window.open(resp.data.url, '_self', 'noopener,noreferrer')
 }
 
 function gotoUserManagement () {
@@ -351,15 +352,15 @@ onMounted(() => {
                 {{ t('ptoj.cjlu_sso') }}
               </div>
               <div class="text-muted-color text-sm">
-                <span v-if="connections.CJLU">
-                  {{ t('ptoj.connected_to_brief', { display: connections.CJLU.providerId }) }}
+                <span v-if="connections.cjlu">
+                  {{ t('ptoj.connected_to_brief', { display: connections.cjlu.providerId }) }}
                 </span>
                 <span v-else>{{ t('ptoj.not_connected') }}</span>
               </div>
             </div>
             <Button
-              :label="connections.CJLU ? t('ptoj.connected') : t('ptoj.connect')" :disabled="!!connections.CJLU"
-              @click="connectOAuth('cjlu')"
+              :label="connections.cjlu ? t('ptoj.connected') : t('ptoj.connect')" :disabled="!!connections.cjlu"
+              @click="connectOAuth(OAuthProvider.CJLU)"
             />
           </div>
           <div class="flex gap-4 items-center justify-between p-4">
@@ -368,15 +369,15 @@ onMounted(() => {
                 {{ t('ptoj.codeforces') }}
               </div>
               <div class="text-muted-color text-sm">
-                <span v-if="connections.Codeforces">
-                  {{ t('ptoj.connected_to_brief', { display: connections.Codeforces.displayName }) }}
+                <span v-if="connections.codeforces">
+                  {{ t('ptoj.connected_to_brief', { display: connections.codeforces.displayName }) }}
                 </span>
                 <span v-else>{{ t('ptoj.not_connected') }}</span>
               </div>
             </div>
             <Button
-              :label="connections.Codeforces ? t('ptoj.connected') : t('ptoj.connect')" :disabled="!!connections.Codeforces"
-              @click="connectOAuth('codeforces')"
+              :label="connections.codeforces ? t('ptoj.connected') : t('ptoj.connect')" :disabled="!!connections.codeforces"
+              @click="connectOAuth(OAuthProvider.Codeforces)"
             />
           </div>
         </div>

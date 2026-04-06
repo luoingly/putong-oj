@@ -1,7 +1,7 @@
-import type { OAuthProvider } from '@putongoj/shared'
 import type { OAuthClientConfig } from '../services/oauth'
 import { randomBytes } from 'node:crypto'
 import { env } from 'node:process'
+import { OAuthProvider } from '@putongoj/shared'
 import dotenvFlow from 'dotenv-flow'
 
 dotenvFlow.config()
@@ -72,7 +72,7 @@ interface GlobalConfig {
 }
 
 const oauthConfigs: GlobalConfig['oauthConfigs'] = {
-  CJLU: {
+  [OAuthProvider.CJLU]: {
     enabled: booleanEnv('PTOJ_OAUTH_CJLU_ENABLED', false),
     clientId: stringEnv('PTOJ_OAUTH_CJLU_CLIENT_ID', ''),
     clientSecret: stringEnv('PTOJ_OAUTH_CJLU_CLIENT_SECRET', ''),
@@ -81,7 +81,7 @@ const oauthConfigs: GlobalConfig['oauthConfigs'] = {
     stateTTL: numberEnv('PTOJ_OAUTH_CJLU_STATE_TTL'),
     timeout: numberEnv('PTOJ_OAUTH_CJLU_TIMEOUT'),
   },
-  Codeforces: {
+  [OAuthProvider.Codeforces]: {
     enabled: booleanEnv('PTOJ_OAUTH_CODEFORCES_ENABLED', false),
     clientId: stringEnv('PTOJ_OAUTH_CODEFORCES_CLIENT_ID', ''),
     clientSecret: stringEnv('PTOJ_OAUTH_CODEFORCES_CLIENT_SECRET', ''),
