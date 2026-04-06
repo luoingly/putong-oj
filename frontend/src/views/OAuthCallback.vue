@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { OAuthProvider } from '@putongoj/shared'
+import { OAuthProvider } from '@putongoj/shared'
 import { computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { handleOAuthCallback } from '@/api/oauth'
@@ -11,19 +11,26 @@ const router = useRouter()
 const sessionStore = useSessionStore()
 const message = useMessage()
 const { fetchProfile, toggleAuthnDialog } = sessionStore
+const oauthProviders = Object.values(OAuthProvider)
 
 const code = computed(() => route.query.code as string || '')
 const state = computed(() => route.query.state as string || '')
-const provider = computed(() => route.params.provider as string || '')
+const provider = computed<OAuthProvider | null>(() => {
+  const value = route.params.provider
+  if (typeof value !== 'string') {
+    return null
+  }
+  return oauthProviders.includes(value as OAuthProvider) ? value as OAuthProvider : null
+})
 
 async function processOAuthCallback () {
-  if (!code.value || !state.value) {
+  if (!code.value || !state.value || !provider.value) {
     message.error('Invalid OAuth callback parameters.')
     router.replace({ name: 'home' })
     return
   }
   const data = await handleOAuthCallback(
-    provider.value.toLowerCase() as Lowercase<OAuthProvider>,
+    provider.value,
     { code: code.value, state: state.value },
   )
   if (!data.success) {

@@ -1,15 +1,23 @@
 import type { OAuthConnection } from '@putongoj/shared'
 import type { Context } from 'koa'
-import type { OAuthEntityUserView } from '../models/OAuth'
 import type { UserDocument } from '../models/User'
 import type { OAuthState } from '../services/oauth'
 import Router from '@koa/router'
-import { ErrorCode, OAuthAction, OAuthProvider } from '@putongoj/shared'
+import {
+  ErrorCode,
+  OAuthAction,
+  OAuthCallbackQueryResultSchema,
+  OAuthCallbackQuerySchema,
+  OAuthGenerateUrlQueryResultSchema,
+  OAuthGenerateUrlQuerySchema,
+  OAuthProvider,
+  OAuthProviderSchema,
+  OAuthUserConnectionsQueryResultSchema,
+} from '@putongoj/shared'
 import { loadProfile, loginRequire } from '../middlewares/authn'
 import oauthService from '../services/oauth'
 import sessionService from '../services/session'
-import { createEnvelopedResponse, createErrorResponse } from '../utils'
-import { ERR_BAD_PARAMS, ERR_NOT_FOUND } from '../utils/constants'
+import { createEnvelopedResponse, createErrorResponse, createZodErrorResponse } from '../utils'
 
 export const providerMap: Record<string, OAuthProvider> = {
   cjlu: OAuthProvider.CJLU,
@@ -20,53 +28,40 @@ const loginEnabledProviders: OAuthProvider[] = [
   OAuthProvider.CJLU,
 ] as const
 
-function parseProvider (ctx: Context): OAuthProvider {
-  const provider = ctx.params.provider || ctx.request.query.provider
-  if (!provider || typeof provider !== 'string') {
-    ctx.throw(...ERR_BAD_PARAMS)
-  }
-  if (!Object.keys(providerMap).includes(provider)) {
-    ctx.throw(...ERR_NOT_FOUND)
-  }
-
-  return providerMap[provider]
-}
-
 export async function generateOAuthUrl (ctx: Context) {
-  const provider = parseProvider(ctx)
-  const { action } = ctx.request.query
-  if (
-    typeof action !== 'string'
-    || !Object.values(OAuthAction).includes(action as OAuthAction)
-  ) {
-    ctx.throw(...ERR_BAD_PARAMS)
+  const provider = OAuthProviderSchema.safeParse(ctx.params.provider)
+  if (!provider.success) {
+    return createZodErrorResponse(ctx, provider.error)
+  }
+  const query = OAuthGenerateUrlQuerySchema.safeParse(ctx.request.query)
+  if (!query.success) {
+    return createZodErrorResponse(ctx, query.error)
   }
 
   try {
-    const url = await oauthService
-      .generateOAuthUrl(provider, action as OAuthAction)
-    ctx.body = { url }
+    const url = await oauthService.generateOAuthUrl(provider.data, query.data.action)
+    const response = OAuthGenerateUrlQueryResultSchema.parse({ url })
+    return createEnvelopedResponse(ctx, response)
   } catch (error: any) {
-    ctx.throw(400, error.message)
+    return createErrorResponse(ctx, ErrorCode.BadRequest, error.message)
   }
 }
 
-export interface OAuthCallbackResponse {
-  action: OAuthAction
-  connection: OAuthEntityUserView
-}
-
 export async function handleOAuthCallback (ctx: Context) {
-  const provider = parseProvider(ctx)
-  const { state, code } = ctx.request.query
-  if (typeof state !== 'string' || typeof code !== 'string') {
-    ctx.throw(...ERR_BAD_PARAMS)
+  const provider = OAuthProviderSchema.safeParse(ctx.params.provider)
+  if (!provider.success) {
+    return createZodErrorResponse(ctx, provider.error)
+  }
+  const query = OAuthCallbackQuerySchema.safeParse(ctx.request.query)
+  if (!query.success) {
+    return createZodErrorResponse(ctx, query.error)
   }
 
   let stateData: OAuthState | null = null
   let connection: OAuthConnection | null = null
   try {
-    const result = await oauthService.handleOAuthCallback(provider, state, code)
+    const result = await oauthService.handleOAuthCallback(
+      provider.data, query.data.state, query.data.code)
     stateData = result.stateData
     connection = result.connection
   } catch (error: any) {
@@ -107,28 +102,18 @@ export async function handleOAuthCallback (ctx: Context) {
   }
   const updatedConnection = await oauthService
     .upsertOAuthConnection(user._id, connection)
-  const response: OAuthCallbackResponse = {
+  const response = OAuthCallbackQueryResultSchema.parse({
     action: stateData.action,
-    connection: oauthService.toUserView(updatedConnection),
-  }
+    connection: updatedConnection,
+  })
   return createEnvelopedResponse(ctx, response)
 }
 
 export async function getUserOAuthConnections (ctx: Context) {
   const profile = await loadProfile(ctx)
-  const connections = await oauthService
-    .getUserOAuthConnections(profile._id)
-  const connectionsUserView: Record<OAuthProvider, OAuthEntityUserView | null> = {
-    [OAuthProvider.CJLU]: null,
-    [OAuthProvider.Codeforces]: null,
-  }
-  Object.keys(connections).forEach((key) => {
-    if (connections[key as OAuthProvider]) {
-      connectionsUserView[key as OAuthProvider] = oauthService
-        .toUserView(connections[key as OAuthProvider]!)
-    }
-  })
-  ctx.body = connectionsUserView
+  const connections = await oauthService.getUserOAuthConnections(profile._id)
+  const result = OAuthUserConnectionsQueryResultSchema.parse(connections)
+  return createEnvelopedResponse(ctx, result)
 }
 
 function registerOAuthHandlers (router: Router) {
