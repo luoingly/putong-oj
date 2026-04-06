@@ -29,6 +29,7 @@ async function migrateOAuthProviderToLowercase () {
     const result = await OAuth.updateMany(
       { provider: from },
       { $set: { provider: to } },
+      { overwriteImmutable: true },
     )
     modifiedTotal += result.modifiedCount
   }

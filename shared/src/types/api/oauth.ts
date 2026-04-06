@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { OAuthAction, OAuthProvider } from '@/consts/index.js'
+import { isoDatetimeToDate } from '../codec.js'
 
 export const OAuthProviderSchema = z.enum(OAuthProvider)
 
@@ -25,8 +26,8 @@ export type OAuthCallbackQuery = z.infer<typeof OAuthCallbackQuerySchema>
 export const OAuthConnectionUserViewSchema = z.object({
   providerId: z.string(),
   displayName: z.string(),
-  createdAt: z.number().int().nonnegative(),
-  updatedAt: z.number().int().nonnegative(),
+  createdAt: isoDatetimeToDate,
+  updatedAt: isoDatetimeToDate,
 })
 
 export type OAuthConnectionUserView = z.input<typeof OAuthConnectionUserViewSchema>

@@ -40,7 +40,7 @@ export async function generateOAuthUrl (ctx: Context) {
 
   try {
     const url = await oauthService.generateOAuthUrl(provider.data, query.data.action)
-    const response = OAuthGenerateUrlQueryResultSchema.parse({ url })
+    const response = OAuthGenerateUrlQueryResultSchema.encode({ url })
     return createEnvelopedResponse(ctx, response)
   } catch (error: any) {
     return createErrorResponse(ctx, ErrorCode.BadRequest, error.message)
@@ -102,7 +102,7 @@ export async function handleOAuthCallback (ctx: Context) {
   }
   const updatedConnection = await oauthService
     .upsertOAuthConnection(user._id, connection)
-  const response = OAuthCallbackQueryResultSchema.parse({
+  const response = OAuthCallbackQueryResultSchema.encode({
     action: stateData.action,
     connection: updatedConnection,
   })
@@ -112,7 +112,7 @@ export async function handleOAuthCallback (ctx: Context) {
 export async function getUserOAuthConnections (ctx: Context) {
   const profile = await loadProfile(ctx)
   const connections = await oauthService.getUserOAuthConnections(profile._id)
-  const result = OAuthUserConnectionsQueryResultSchema.parse(connections)
+  const result = OAuthUserConnectionsQueryResultSchema.encode(connections)
   return createEnvelopedResponse(ctx, result)
 }
 
