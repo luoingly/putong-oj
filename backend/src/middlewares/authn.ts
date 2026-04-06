@@ -58,12 +58,12 @@ export async function loadProfile (ctx: Context): Promise<UserDocument> {
   return profile
 }
 
-const loginRequire: Middleware = async (ctx, next) => {
+export const loginRequire: Middleware = async (ctx, next) => {
   await loadProfile(ctx)
   await next()
 }
 
-const adminRequire: Middleware = async (ctx, next) => {
+export const adminRequire: Middleware = async (ctx, next) => {
   const profile = await loadProfile(ctx)
   if (!profile.isAdmin) {
     return ctx.throw(...ERR_PERM_DENIED)
@@ -71,7 +71,7 @@ const adminRequire: Middleware = async (ctx, next) => {
   await next()
 }
 
-const rootRequire: Middleware = async (ctx, next) => {
+export const rootRequire: Middleware = async (ctx, next) => {
   const profile = await loadProfile(ctx)
   if (!profile.isRoot) {
     return ctx.throw(...ERR_PERM_DENIED)

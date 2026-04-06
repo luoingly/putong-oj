@@ -1,6 +1,7 @@
 import type { Context } from 'koa'
 import type { Types } from 'mongoose'
 import type { DiscussionQueryFilters } from '../services/discussion'
+import Router from '@koa/router'
 import {
   CommentCreatePayloadSchema,
   DiscussionCreatePayloadSchema,
@@ -10,7 +11,8 @@ import {
   DiscussionType,
   ErrorCode,
 } from '@putongoj/shared'
-import { loadProfile } from '../middlewares/authn'
+import { loadProfile, loginRequire } from '../middlewares/authn'
+import { commentCreateLimit, discussionCreateLimit } from '../middlewares/ratelimit'
 import { loadContestState } from '../policies/contest'
 import { loadCourseRoleById } from '../policies/course'
 import { loadDiscussion, publicDiscussionTypes } from '../policies/discussion'
@@ -168,11 +170,16 @@ async function createComment (ctx: Context) {
   }
 }
 
-const discussionController = {
-  findDiscussions,
-  getDiscussion,
-  createDiscussion,
-  createComment,
-} as const
+function registerDiscussionHandlers (router: Router) {
+  const discussionRouter = new Router({ prefix: '/discussions' })
 
-export default discussionController
+  discussionRouter.get('/', findDiscussions)
+  discussionRouter.post('/', loginRequire, discussionCreateLimit, createDiscussion)
+
+  discussionRouter.get('/:discussionId', getDiscussion)
+  discussionRouter.post('/:discussionId/comments', loginRequire, commentCreateLimit, createComment)
+
+  router.use(discussionRouter.routes(), discussionRouter.allowedMethods())
+}
+
+export default registerDiscussionHandlers

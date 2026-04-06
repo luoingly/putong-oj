@@ -1,4 +1,5 @@
 import type { Context } from 'koa'
+import Router from '@koa/router'
 import { TagListQueryResultSchema } from '@putongoj/shared'
 import tagService from '../services/tag'
 import { createEnvelopedResponse } from '../utils'
@@ -9,8 +10,12 @@ export async function findTags (ctx: Context) {
   return createEnvelopedResponse(ctx, result)
 }
 
-const tagController = {
-  findTags,
-} as const
+function registerTagHandlers (router: Router) {
+  const tagRouter = new Router({ prefix: '/tags' })
 
-export default tagController
+  tagRouter.get('/', findTags)
+
+  router.use(tagRouter.routes(), tagRouter.allowedMethods())
+}
+
+export default registerTagHandlers

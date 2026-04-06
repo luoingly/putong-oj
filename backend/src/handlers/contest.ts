@@ -2,6 +2,7 @@ import type { ContestModel } from '@putongoj/shared'
 import type { Context } from 'koa'
 import type { Types } from 'mongoose'
 import type { DiscussionQueryFilters } from '../services/discussion'
+import Router from '@koa/router'
 import {
   ContestConfigEditPayloadSchema,
   ContestConfigQueryResultSchema,
@@ -25,7 +26,8 @@ import {
   JudgeStatus,
   ParticipationStatus,
 } from '@putongoj/shared'
-import { loadProfile } from '../middlewares/authn'
+import { loadProfile, loginRequire } from '../middlewares/authn'
+import { dataExportLimit } from '../middlewares/ratelimit'
 import Group from '../models/Group'
 import Problem from '../models/Problem'
 import Solution from '../models/Solution'
@@ -499,21 +501,26 @@ export async function createContest (ctx: Context) {
   }
 }
 
-const contestController = {
-  loadContestState,
-  findContests,
-  createContest,
-  getContest,
-  getParticipation,
-  findParticipants,
-  updateParticipantStatus,
-  participateContest,
-  getRanklist,
-  getConfig,
-  updateConfig,
-  findSolutions,
-  exportSolutions,
-  findContestDiscussions,
-} as const
+function registerContestHandlers (router: Router) {
+  const contestRouter = new Router({ prefix: '/contests' })
 
-export default contestController
+  contestRouter.get('/', findContests)
+  contestRouter.get('/:contestId', loginRequire, getContest)
+  contestRouter.get('/:contestId/participation', loginRequire, getParticipation)
+  contestRouter.post('/:contestId/participation', loginRequire, participateContest)
+  contestRouter.get('/:contestId/participants', loginRequire, findParticipants)
+  contestRouter.put('/:contestId/participants/:username', loginRequire, updateParticipantStatus)
+  contestRouter.get('/:contestId/ranklist', loginRequire, getRanklist)
+  contestRouter.post('/', loginRequire, createContest)
+  contestRouter.get('/:contestId/configs', loginRequire, getConfig)
+  contestRouter.put('/:contestId/configs', loginRequire, updateConfig)
+
+  contestRouter.get('/:contestId/solutions', loginRequire, findSolutions)
+  contestRouter.get('/:contestId/solutions/export', loginRequire, dataExportLimit, exportSolutions)
+
+  contestRouter.get('/:contestId/discussions', loginRequire, findContestDiscussions)
+
+  router.use(contestRouter.routes(), contestRouter.allowedMethods())
+}
+
+export default registerContestHandlers

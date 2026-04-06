@@ -1,5 +1,6 @@
 import type { Context } from 'koa'
 import type { DiscussionUpdateDto } from '../services/discussion'
+import Router from '@koa/router'
 import {
   AdminCommentUpdatePayloadSchema,
   AdminDiscussionUpdatePayloadSchema,
@@ -28,7 +29,8 @@ import {
   SessionRevokeOthersResultSchema,
 } from '@putongoj/shared'
 import { distributeWork } from '../jobs/helper'
-import { loadProfile } from '../middlewares/authn'
+import { adminRequire, loadProfile, rootRequire } from '../middlewares/authn'
+import { dataExportLimit } from '../middlewares/ratelimit'
 import { contestService } from '../services/contest'
 import cryptoService from '../services/crypto'
 import discussionService from '../services/discussion'
@@ -620,34 +622,48 @@ export async function removeFile (ctx: Context) {
   return createEnvelopedResponse(ctx, null)
 }
 
-const adminController = {
-  findUsers,
-  getUser,
-  updateUser,
-  updateUserPassword,
-  getUserOAuthConnections,
-  removeUserOAuthConnection,
-  findSolutions,
-  exportSolutions,
-  sendNotificationBroadcast,
-  sendNotificationUser,
-  getGroup,
-  createGroup,
-  updateGroup,
-  updateGroupMembers,
-  removeGroup,
-  updateDiscussion,
-  updateComment,
-  listUserSessions,
-  revokeUserSession,
-  revokeUserAllSessions,
-  updateAvatarPresets,
-  findTags,
-  createTag,
-  updateTag,
-  triggerScanUploadsFolder,
-  findFiles,
-  removeFile,
-} as const
+function registerAdminHandlers (router: Router) {
+  const adminRouter = new Router({ prefix: '/admin' })
 
-export default adminController
+  adminRouter.use(adminRequire)
+
+  adminRouter.get('/users', findUsers)
+  adminRouter.get('/users/:uid', getUser)
+  adminRouter.put('/users/:uid', updateUser)
+  adminRouter.put('/users/:uid/password', updateUserPassword)
+  adminRouter.get('/users/:uid/oauth', getUserOAuthConnections)
+  adminRouter.delete('/users/:uid/oauth/:provider', removeUserOAuthConnection)
+  adminRouter.get('/users/:uid/sessions', listUserSessions)
+  adminRouter.delete('/users/:uid/sessions', revokeUserAllSessions)
+  adminRouter.delete('/users/:uid/sessions/:sessionId', revokeUserSession)
+
+  adminRouter.get('/solutions', findSolutions)
+  adminRouter.get('/solutions/export', dataExportLimit, exportSolutions)
+
+  adminRouter.post('/notifications/broadcast', sendNotificationBroadcast)
+  adminRouter.post('/notifications/users/:username', sendNotificationUser)
+
+  adminRouter.get('/groups/:groupId', getGroup)
+  adminRouter.post('/groups', createGroup)
+  adminRouter.put('/groups/:groupId', updateGroup)
+  adminRouter.put('/groups/:groupId/members', updateGroupMembers)
+  adminRouter.delete('/groups/:groupId', rootRequire, removeGroup)
+
+  adminRouter.put('/discussions/:discussionId', updateDiscussion)
+  adminRouter.put('/comments/:commentId', updateComment)
+
+  adminRouter.put('/settings/avatar-presets', rootRequire, updateAvatarPresets)
+
+  adminRouter.post('/actions/scan-uploads-folder', rootRequire, triggerScanUploadsFolder)
+
+  adminRouter.get('/files', findFiles)
+  adminRouter.delete('/files/:storageKey', removeFile)
+
+  adminRouter.get('/tags', findTags)
+  adminRouter.post('/tags', createTag)
+  adminRouter.put('/tags/:tagId', updateTag)
+
+  router.use(adminRouter.routes(), adminRouter.allowedMethods())
+}
+
+export default registerAdminHandlers

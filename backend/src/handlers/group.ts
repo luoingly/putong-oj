@@ -1,4 +1,5 @@
 import type { Context } from 'koa'
+import Router from '@koa/router'
 import { GroupListQueryResultSchema } from '@putongoj/shared'
 import groupService from '../services/group'
 import { createEnvelopedResponse } from '../utils'
@@ -9,8 +10,12 @@ export async function findGroups (ctx: Context) {
   return createEnvelopedResponse(ctx, result)
 }
 
-const groupController = {
-  findGroups,
-} as const
+function registerGroupHandlers (router: Router) {
+  const groupRouter = new Router({ prefix: '/group' })
 
-export default groupController
+  groupRouter.get('/', findGroups)
+
+  router.use(groupRouter.routes(), groupRouter.allowedMethods())
+}
+
+export default registerGroupHandlers

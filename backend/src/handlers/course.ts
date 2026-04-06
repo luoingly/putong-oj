@@ -2,8 +2,9 @@ import type { Paginated } from '@putongoj/shared'
 import type { Context } from 'koa'
 import type { CourseRole } from '../types'
 import type { CourseEntity, CourseEntityItem, CourseEntityPreview, CourseEntityViewWithRole, CourseMemberView } from '../types/entity'
+import Router from '@koa/router'
 import { pick } from 'lodash'
-import { loadProfile } from '../middlewares/authn'
+import { adminRequire, loadProfile, loginRequire, rootRequire } from '../middlewares/authn'
 import User from '../models/User'
 import { loadCourseStateOrThrow } from '../policies/course'
 import courseService from '../services/course'
@@ -287,21 +288,25 @@ const removeCourseProblem = async (ctx: Context) => {
   ctx.body = { success: result }
 }
 
-const courseController = {
-  findCourses,
-  findCourseItems,
-  getCourse,
-  joinCourse,
-  createCourse,
-  updateCourse,
-  findCourseMembers,
-  getCourseMember,
-  updateCourseMember,
-  removeCourseMember,
-  addCourseProblems,
-  moveCourseProblem,
-  rearrangeCourseProblem,
-  removeCourseProblem,
-} as const
+function registerCourseHandlers (router: Router) {
+  const courseRouter = new Router({ prefix: '/course' })
 
-export default courseController
+  courseRouter.get('/', findCourses)
+  courseRouter.get('/items', loginRequire, findCourseItems)
+  courseRouter.post('/', rootRequire, createCourse)
+  courseRouter.get('/:courseId', loginRequire, getCourse)
+  courseRouter.post('/:courseId', loginRequire, joinCourse)
+  courseRouter.put('/:courseId', loginRequire, updateCourse)
+  courseRouter.get('/:courseId/member', loginRequire, findCourseMembers)
+  courseRouter.get('/:courseId/member/:userId', loginRequire, getCourseMember)
+  courseRouter.post('/:courseId/member/:userId', loginRequire, updateCourseMember)
+  courseRouter.delete('/:courseId/member/:userId', loginRequire, removeCourseMember)
+  courseRouter.post('/:courseId/problem', adminRequire, addCourseProblems)
+  courseRouter.put('/:courseId/problem/:problemId', adminRequire, moveCourseProblem)
+  courseRouter.post('/:courseId/problem/rearrange', rootRequire, rearrangeCourseProblem)
+  courseRouter.delete('/:courseId/problem/:problemId', adminRequire, removeCourseProblem)
+
+  router.use(courseRouter.routes(), courseRouter.allowedMethods())
+}
+
+export default registerCourseHandlers

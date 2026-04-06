@@ -3,8 +3,9 @@ import type { Context } from 'koa'
 import type { OAuthEntityUserView } from '../models/OAuth'
 import type { UserDocument } from '../models/User'
 import type { OAuthState } from '../services/oauth'
+import Router from '@koa/router'
 import { ErrorCode, OAuthAction, OAuthProvider } from '@putongoj/shared'
-import { loadProfile } from '../middlewares/authn'
+import { loadProfile, loginRequire } from '../middlewares/authn'
 import oauthService from '../services/oauth'
 import sessionService from '../services/session'
 import { createEnvelopedResponse, createErrorResponse } from '../utils'
@@ -130,10 +131,14 @@ export async function getUserOAuthConnections (ctx: Context) {
   ctx.body = connectionsUserView
 }
 
-const oauthController = {
-  generateOAuthUrl,
-  handleOAuthCallback,
-  getUserOAuthConnections,
-} as const
+function registerOAuthHandlers (router: Router) {
+  const oauthRouter = new Router({ prefix: '/oauth' })
 
-export default oauthController
+  oauthRouter.get('/', loginRequire, getUserOAuthConnections)
+  oauthRouter.get('/:provider/url', generateOAuthUrl)
+  oauthRouter.get('/:provider/callback', handleOAuthCallback)
+
+  router.use(oauthRouter.routes(), oauthRouter.allowedMethods())
+}
+
+export default registerOAuthHandlers

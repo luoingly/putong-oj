@@ -1,10 +1,11 @@
 import type { Context } from 'koa'
 import { env } from 'node:process'
+import Router from '@koa/router'
 import { AvatarPresetsQueryResultSchema, PublicConfigQueryResultSchema } from '@putongoj/shared'
 import { v4 } from 'uuid'
 import { globalConfig } from '../config'
 import redis from '../config/redis'
-import { loadProfile } from '../middlewares/authn'
+import { loadProfile, loginRequire } from '../middlewares/authn'
 import cryptoService from '../services/crypto'
 import { settingsService } from '../services/settings'
 import { createEnvelopedResponse } from '../utils'
@@ -68,11 +69,15 @@ export async function getAvatarPresets (ctx: Context) {
   return createEnvelopedResponse(ctx, result)
 }
 
-const utilsController = {
-  serverTime,
-  getPublicConfig,
-  getWebSocketToken,
-  getAvatarPresets,
-} as const
+function registerUtilsHandlers (router: Router) {
+  const utilsRouter = new Router()
 
-export default utilsController
+  utilsRouter.get('/servertime', serverTime)
+  utilsRouter.get('/config', getPublicConfig)
+  utilsRouter.get('/websocket/token', loginRequire, getWebSocketToken)
+  utilsRouter.get('/utils/avatar-presets', loginRequire, getAvatarPresets)
+
+  router.use(utilsRouter.routes(), utilsRouter.allowedMethods())
+}
+
+export default registerUtilsHandlers

@@ -1,6 +1,7 @@
 import type { Context } from 'koa'
 import { Buffer } from 'node:buffer'
 import { timingSafeEqual } from 'node:crypto'
+import Router from '@koa/router'
 import {
   AccountChangePasswordPayloadSchema,
   AccountEditPayloadSchema,
@@ -14,7 +15,8 @@ import {
   SessionRevokeOthersResultSchema,
   UserPrivilege,
 } from '@putongoj/shared'
-import { checkSession, loadProfile } from '../middlewares/authn'
+import { checkSession, loadProfile, loginRequire } from '../middlewares/authn'
+import { userLoginLimit, userRegisterLimit } from '../middlewares/ratelimit'
 import cryptoService from '../services/crypto'
 import sessionService from '../services/session'
 import { settingsService } from '../services/settings'
@@ -264,17 +266,22 @@ export async function revokeOtherSessions (ctx: Context) {
   return createEnvelopedResponse(ctx, result)
 }
 
-const accountController = {
-  getProfile,
-  userLogin,
-  userRegister,
-  userLogout,
-  updateProfile,
-  updatePassword,
-  findSubmissions,
-  listSessions,
-  revokeSession,
-  revokeOtherSessions,
-} as const
+function registerAccountHandlers (router: Router) {
+  const accountRouter = new Router({ prefix: '/account' })
 
-export default accountController
+  accountRouter.get('/profile', getProfile)
+  accountRouter.post('/login', userLoginLimit, userLogin)
+  accountRouter.post('/register', userRegisterLimit, userRegister)
+  accountRouter.post('/logout', loginRequire, userLogout)
+  accountRouter.put('/profile', loginRequire, updateProfile)
+  accountRouter.put('/password', loginRequire, updatePassword)
+  accountRouter.get('/submissions', loginRequire, findSubmissions)
+
+  accountRouter.get('/sessions', loginRequire, listSessions)
+  accountRouter.delete('/sessions', loginRequire, revokeOtherSessions)
+  accountRouter.delete('/sessions/:sessionId', loginRequire, revokeSession)
+
+  router.use(accountRouter.routes(), accountRouter.allowedMethods())
+}
+
+export default registerAccountHandlers

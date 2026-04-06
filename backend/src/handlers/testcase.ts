@@ -1,13 +1,15 @@
 import type { Context } from 'koa'
 import { Buffer } from 'node:buffer'
 import path from 'node:path'
+import Router from '@koa/router'
 import { ProblemTestcaseListQueryResultSchema } from '@putongoj/shared'
 import { BlobWriter, TextReader, ZipWriter } from '@zip.js/zip.js'
 import fse from 'fs-extra'
 import send from 'koa-send'
 import remove from 'lodash/remove'
 import { v4 as uuid, validate } from 'uuid'
-import { loadProfile } from '../middlewares/authn'
+import { loadProfile, loginRequire } from '../middlewares/authn'
+import { dataExportLimit } from '../middlewares/ratelimit'
 import { loadProblemOrThrow } from '../policies/problem'
 import courseService from '../services/course'
 import { createEnvelopedResponse, toObjectRecord } from '../utils'
@@ -207,12 +209,16 @@ export async function getTestcase (ctx: Context) {
   await send(ctx, `${uuid}.${type}`, { root: testDir })
 }
 
-const testcaseController = {
-  findTestcases,
-  exportTestcases,
-  createTestcase,
-  getTestcase,
-  removeTestcase,
-} as const
+function registerTestcaseHandlers (router: Router) {
+  const testcaseRouter = new Router({ prefix: '/problem/:pid/testcases' })
 
-export default testcaseController
+  testcaseRouter.get('/', loginRequire, findTestcases)
+  testcaseRouter.post('/', loginRequire, createTestcase)
+  testcaseRouter.get('/export', loginRequire, dataExportLimit, exportTestcases)
+  testcaseRouter.get('/:uuid.:type', loginRequire, getTestcase)
+  testcaseRouter.del('/:uuid', loginRequire, removeTestcase)
+
+  router.use(testcaseRouter.routes(), testcaseRouter.allowedMethods())
+}
+
+export default registerTestcaseHandlers
