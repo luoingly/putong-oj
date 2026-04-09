@@ -1,11 +1,13 @@
 import test from 'ava'
 import redis from '../../src/config/redis'
-import { cacheService } from '../../src/services/cache'
+import { CacheKey, cacheService } from '../../src/services/cache'
 
 const KEY_PREFIX = 'cache_test'
 
 async function cleanupByPrefix (): Promise<void> {
-  const keys = await redis.keys(`${KEY_PREFIX}:*`)
+  const dataKeys = await redis.keys(`${KEY_PREFIX}:*`)
+  const lockKeys = await redis.keys(`${CacheKey.updateLock(KEY_PREFIX)}:*`)
+  const keys = [ ...dataKeys, ...lockKeys ]
   if (keys.length > 0) {
     await redis.del(...keys)
   }
@@ -139,4 +141,29 @@ test.serial('getOrCreate (skipMemoryCache)', async (t) => {
 
   t.deepEqual(result, { from: 'redis-updated' })
   t.is(createCount, 1)
+})
+
+test.serial('getOrCreate (concurrent calls should only run one factory)', async (t) => {
+  const key = `${KEY_PREFIX}:getorcreate:concurrent`
+
+  let callCount = 0
+  const factory = async () => {
+    callCount++
+    await new Promise(resolve => setTimeout(resolve, 200))
+    return { from: 'factory-once' }
+  }
+
+  const [ result1, result2, result3 ] = await Promise.all([
+    cacheService.getOrCreate(key, factory, { skipMemoryCache: true }),
+    cacheService.getOrCreate(key, factory, { skipMemoryCache: true }),
+    cacheService.getOrCreate(key, factory, { skipMemoryCache: true }),
+  ])
+
+  t.deepEqual(result1, { from: 'factory-once' })
+  t.deepEqual(result2, { from: 'factory-once' })
+  t.deepEqual(result3, { from: 'factory-once' })
+  t.is(callCount, 1)
+
+  const lockValue = await redis.get(CacheKey.updateLock(key))
+  t.is(lockValue, null)
 })
