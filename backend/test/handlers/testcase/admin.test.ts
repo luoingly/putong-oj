@@ -13,7 +13,7 @@ const request = supertest.agent(server)
 let testPid: number | null = null
 let testcaseUuid: string | null = null
 
-test.before('Login as admin', async (t) => {
+test.before('Login as admin and create test problem', async (t) => {
   const login = await request
     .post('/api/account/login')
     .send({
@@ -22,9 +22,7 @@ test.before('Login as admin', async (t) => {
     })
 
   t.is(login.status, 200)
-})
 
-test.before('Create a test problem', async (t) => {
   const create = await request
     .post('/api/problem')
     .send({

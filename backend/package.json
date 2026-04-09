@@ -90,27 +90,24 @@
     ]
   },
   "ava": {
-    "concurrency": 1,
     "environmentVariables": {
       "NODE_ENV": "test"
     },
     "extensions": [
-      "ts",
-      "js"
+      "ts"
     ],
     "files": [
-      "test/**/*.test.{js,ts}"
+      "test/**/*.test.ts"
     ],
     "require": [
       "ts-node/register",
       "./test/_force-exit.mjs"
     ],
-    "serial": true,
     "timeout": "30s"
   },
   "nyc": {
     "include": [
-      "src/**/*.{js,ts}"
+      "src/**/*.ts"
     ],
     "exclude": [
       "**/*.d.ts"
