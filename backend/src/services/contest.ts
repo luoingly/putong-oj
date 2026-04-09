@@ -256,7 +256,7 @@ async function getProblemsWithStats (contest: Types.ObjectId, isJury: boolean) {
       }))
     },
 
-    { ttl: 10 },
+    { redisTtl: 10 },
   )
 }
 
@@ -342,7 +342,7 @@ async function getRanklist (contest: Types.ObjectId, isJury: boolean) {
 
     // Frontend's auto-refresh interval is 10s,
     // so the cache TTL is set a bit shorter.
-    { ttl: 9 },
+    { redisTtl: 9 },
   )
 }
 

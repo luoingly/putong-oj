@@ -11,7 +11,7 @@ const REDIS_LOCK_TTL = 60
 const REDIS_LOCK_RETRY = 50 // in milliseconds
 
 interface CacheOptions {
-  ttl?: number
+  redisTtl?: number
 }
 
 class CacheService {
@@ -89,7 +89,7 @@ class CacheService {
       result = await func()
       value = JSON.stringify(result)
 
-      const ttl = opt?.ttl ?? REDIS_CACHE_TTL
+      const ttl = opt?.redisTtl ?? REDIS_CACHE_TTL
       await this.redisClient.set(key, value, 'EX', ttl)
     } finally {
       await this.releaseLock(key)
