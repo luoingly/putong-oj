@@ -8,8 +8,9 @@ const MEMORY_CACHE_TTL = 3
 const REDIS_CACHE_TTL = 5
 
 const MEMORY_CHECK_PERIOD = 60
-const REDIS_LOCK_TTL = 60
-const REDIS_LOCK_RETRY_MS = 50
+const REDIS_LOCK_TTL = 10
+const REDIS_LOCK_RETRY_MS = 100
+const REDIS_LOCK_MAX_RETRIES = 100
 
 interface CacheOptions {
   skipMemoryCache?: boolean
@@ -85,35 +86,31 @@ class CacheService {
     func: () => Promise<T>,
     opt?: CacheCreationOptions,
   ): Promise<T> {
-    let value = await this.redisClient.get(key)
-    let result: T | null = null
+    let redisValue = await this.redisClient.get(key)
+    let value = this.tryDecode<T>(redisValue)
 
-    result = this.tryDecode<T>(value)
-    if (result !== null) {
-      return result
+    if (value !== null) {
+      return value
     }
 
-    const { token, waited } = await this.acquireLock(key)
+    const lockToken = await this.acquireLock(key)
 
     try {
-      if (waited) {
-        value = await this.redisClient.get(key)
-        result = this.tryDecode<T>(value)
-      }
+      redisValue = await this.redisClient.get(key)
+      value = this.tryDecode<T>(redisValue)
 
-      if (result === null) {
-        result = await func()
-        value = JSON.stringify(result)
+      if (value === null) {
+        value = await func()
 
         const ttl = opt?.redisTtl ?? REDIS_CACHE_TTL
-        await this.redisClient.set(key, value, 'EX', ttl)
+        await this.redisClient.set(key, JSON.stringify(value), 'EX', ttl)
       }
     } finally {
       // always release lock
-      await this.releaseLock(key, token)
+      await this.releaseLock(key, lockToken)
     }
 
-    return result
+    return value
   }
 
   private tryDecode<T>(value: string | null): T | null {
@@ -128,20 +125,20 @@ class CacheService {
     }
   }
 
-  private async acquireLock (key: string): Promise<{ token: string, waited: boolean }> {
+  private async acquireLock (key: string): Promise<string> {
     const lockKey = CacheKey.updateLock(key)
     const token = randomUUID()
 
-    let waited = false
-    while (true) {
+    for (let i = 0; i < REDIS_LOCK_MAX_RETRIES; i++) {
       const result = await this.redisClient.set(lockKey, token, 'EX', REDIS_LOCK_TTL, 'NX')
       if (result === 'OK') {
-        return { token, waited }
+        return token
       }
 
-      waited = true
       await new Promise(resolve => setTimeout(resolve, REDIS_LOCK_RETRY_MS))
     }
+
+    throw new Error(`Failed to acquire lock for key: ${key}`)
   }
 
   private async releaseLock (lock: string, token: string): Promise<void> {
