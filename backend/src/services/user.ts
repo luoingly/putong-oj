@@ -219,7 +219,7 @@ export async function getSubmissionHeatmap (user: Types.ObjectId) {
       return { data, startDate, endDate, timezone }
     },
 
-    { ttl: 60 * 5 }, // 5 minutes
+    { redisTtl: 60 * 5 }, // 5 minutes
   )
 }
 

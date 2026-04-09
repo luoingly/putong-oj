@@ -223,7 +223,7 @@ export async function getStatistics (problem: Types.ObjectId): Promise<ProblemSt
       }
     },
 
-    { ttl: 30 },
+    { redisTtl: 30 },
   )
 }
 
