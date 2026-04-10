@@ -57,7 +57,7 @@
     "zod": "^4.3.6"
   },
   "devDependencies": {
-    "@antfu/eslint-config": "^8.0.0",
+    "@antfu/eslint-config": "^8.1.1",
     "@ava/typescript": "^6.0.0",
     "@types/fast-levenshtein": "^0.0.4",
     "@types/fs-extra": "^11.0.4",
