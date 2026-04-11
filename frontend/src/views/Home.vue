@@ -1,41 +1,55 @@
 <script setup lang="ts">
+import type { PostListQueryResult } from '@putongoj/shared'
+import { PostListQuerySchema } from '@putongoj/shared'
 import { storeToRefs } from 'pinia'
 import Button from 'primevue/button'
 import Paginator from 'primevue/paginator'
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
-import api from '@/api'
+import { findPosts } from '@/api/post'
+import PostCreateDialog from '@/components/PostCreateDialog.vue'
 import { useSessionStore } from '@/store/modules/session'
 import { timePretty } from '@/utils/format'
 import { onRouteQueryUpdate } from '@/utils/helper'
+import { useMessage } from '@/utils/message'
 
 const { locale, t } = useI18n()
 const route = useRoute()
 const router = useRouter()
+const message = useMessage()
 const sessionStore = useSessionStore()
 const { isAdmin } = storeToRefs(sessionStore)
 
 const zhCN = computed(() => locale.value === 'zh-CN')
-const page = computed(() => Number.parseInt(route.query.page as string) || 1)
-const pageSize = computed(() => Number.parseInt(route.query.pageSize as string) || 10)
+const query = ref(PostListQuerySchema.parse({}))
 
-const docs = ref([] as { nid: number, title: string, status: number, create: number }[])
+const docs = ref([] as PostListQueryResult['docs'])
 const total = ref(0)
 const loading = ref(false)
+const createDialog = ref(false)
 
 async function fetch () {
-  const query = {
-    page: page.value,
-    pageSize: pageSize.value,
+  const parsed = PostListQuerySchema.safeParse(route.query)
+  if (!parsed.success) {
+    router.replace({ query: {} })
+    return
   }
+  query.value = parsed.data
 
   loading.value = true
-  const resp = await api.news.find(query)
+  const resp = await findPosts(query.value)
   loading.value = false
 
-  docs.value = resp.data.list.docs
-  total.value = resp.data.list.total
+  if (!resp.success || !resp.data) {
+    message.error(t('ptoj.empty_content_desc'), resp.message)
+    docs.value = []
+    total.value = 0
+    return
+  }
+
+  docs.value = resp.data.docs
+  total.value = resp.data.total
 }
 
 function onPage (event: any) {
@@ -77,9 +91,7 @@ onRouteQueryUpdate(fetch)
           </h1>
         </div>
 
-        <RouterLink v-if="isAdmin" :to="{ name: 'newsCreate' }">
-          <Button icon="pi pi-plus" :label="t('ptoj.create_announcement')" />
-        </RouterLink>
+        <Button v-if="isAdmin" icon="pi pi-plus" :label="t('ptoj.create_announcement')" @click="createDialog = true" />
       </div>
 
       <template v-if="loading || docs.length === 0">
@@ -90,16 +102,24 @@ onRouteQueryUpdate(fetch)
       </template>
 
       <template v-else>
-        <div v-for="doc in docs" :key="doc.nid" class="border-surface border-t p-2">
-          <RouterLink :to="{ name: 'newsInfo', params: { nid: doc.nid } }" class="block group px-4 py-3 space-y-2">
+        <div v-for="doc in docs" :key="doc.slug" class="border-surface border-t p-2">
+          <RouterLink :to="{ name: 'PostDetail', params: { slug: doc.slug } }" class="block group px-4 py-3 space-y-2">
             <div class="flex gap-4 text-muted-color text-sm">
               <span class="flex gap-2 items-center">
                 <span class="pi pi-calendar" />
-                <span>{{ timePretty(doc.create, 'yyyy-MM-dd HH:mm') }}</span>
+                <span>{{ timePretty(doc.createdAt, 'yyyy-MM-dd HH:mm') }}</span>
               </span>
-              <span v-if="doc.status === 0" class="flex gap-2 items-center text-orange-400">
+              <span v-if="doc.isPinned" class="flex gap-2 items-center text-primary">
+                <span class="pi pi-thumbtack" />
+                <span>{{ t('ptoj.pinned') }}</span>
+              </span>
+              <span v-if="doc.isHidden" class="flex gap-2 items-center text-orange-400">
                 <span class="pi pi-eye-slash" />
                 <span>{{ t('ptoj.hidden') }}</span>
+              </span>
+              <span v-if="!doc.isPublished" class="flex gap-2 items-center text-yellow-500">
+                <span class="pi pi-minus-circle" />
+                <span>{{ t('ptoj.unpublished') }}</span>
               </span>
             </div>
             <p
@@ -113,10 +133,12 @@ onRouteQueryUpdate(fetch)
 
       <Paginator
         class="border-surface border-t bottom-0 md:rounded-b-xl overflow-hidden sticky z-10"
-        :first="(page - 1) * pageSize" :rows="pageSize" :total-records="total"
+        :first="(query.page - 1) * query.pageSize" :rows="query.pageSize" :total-records="total"
         template="FirstPageLink PrevPageLink CurrentPageReport NextPageLink LastPageLink"
         :current-page-report-template="t('ptoj.paginator_report')" @page="onPage"
       />
+
+      <PostCreateDialog v-model:visible="createDialog" />
     </div>
   </div>
 </template>
