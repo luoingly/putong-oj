@@ -33,19 +33,6 @@ const problem = {
     instance.delete(`/problem/${data.pid}`, data),
 }
 
-const news = {
-  findOne: (data: { [key: string]: any }) =>
-    instance.get(`/news/${data.nid}`, { params: data }),
-  find: (data: { [key: string]: any }) =>
-    instance.get('/news/list', { params: data }),
-  create: (data: { [key: string]: any }) =>
-    instance.post('/news/', data),
-  update: (data: { [key: string]: any }) =>
-    instance.put(`/news/${data.nid}`, data),
-  delete: (data: { [key: string]: any }) =>
-    instance.delete(`/news/${data.nid}`, data),
-}
-
 const course = {
   findCourses: (params: PaginateParams) =>
     instance.get<Paginated<CourseEntityPreview>>('/course', { params }),
@@ -81,6 +68,5 @@ export default {
   ...utils,
   solution,
   problem,
-  news,
   course,
 }
