@@ -7,6 +7,7 @@ import Discussion from '../src/models/Discussion'
 import Files from '../src/models/Files'
 import Group from '../src/models/Group'
 import ID from '../src/models/ID'
+import Post from '../src/models/Post'
 import Problem from '../src/models/Problem'
 import Settings from '../src/models/Settings'
 import Solution from '../src/models/Solution'
@@ -23,6 +24,7 @@ export async function removeall () {
     Files.deleteMany({}),
     Group.deleteMany({}),
     ID.deleteMany({}),
+    Post.deleteMany({}),
     Problem.deleteMany({}),
     Settings.deleteMany({}),
     Solution.deleteMany({}),
