@@ -7,8 +7,8 @@ import registerCourseHandlers from './handlers/course'
 import registerDiscussionHandlers from './handlers/discussion'
 import registerFileHandlers from './handlers/file'
 import registerGroupHandlers from './handlers/group'
-import registerNewsHandlers from './handlers/news'
 import registerOAuthHandlers from './handlers/oauth'
+import registerPostHandlers from './handlers/post'
 import registerProblemHandlers from './handlers/problem'
 import registerSolutionHandlers from './handlers/solution'
 import registerTagHandlers from './handlers/tag'
@@ -25,7 +25,7 @@ registerCourseHandlers(router)
 registerDiscussionHandlers(router)
 registerFileHandlers(router)
 registerGroupHandlers(router)
-registerNewsHandlers(router)
+registerPostHandlers(router)
 registerOAuthHandlers(router)
 registerProblemHandlers(router)
 registerSolutionHandlers(router)

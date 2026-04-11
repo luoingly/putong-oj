@@ -1,5 +1,10 @@
+import { Buffer } from 'node:buffer'
+import { randomUUID } from 'node:crypto'
+import { md5 } from '@noble/hashes/legacy.js'
 import { OAuthProvider } from '@putongoj/shared'
+import mongoose from '../config/db'
 import OAuth from '../models/OAuth'
+import Post from '../models/Post'
 import User from '../models/User'
 import { settingsService } from '../services/settings'
 import logger from '../utils/logger'
@@ -37,6 +42,64 @@ async function migrateOAuthProviderToLowercase () {
   logger.info(`Migration OAuth.provider lowercase completed, modified=${modifiedTotal}`)
 }
 
+async function migrateNewsToPost () {
+  interface LegacyNews {
+    _id?: mongoose.Types.ObjectId
+    nid?: number
+    title?: string
+    content?: string
+    status?: number
+    createdAt?: Date
+    updatedAt?: Date
+  }
+
+  const newsCollection = mongoose.connection.collection('News')
+  const legacyNews = await newsCollection.find({}).toArray() as LegacyNews[]
+
+  function buildLegacyPostSlug (nid: number) {
+    const nidBytes = Uint8Array.from(Buffer.from(`news-${nid}`))
+    const hex = Buffer.from(md5(nidBytes)).toString('hex')
+    return [
+      hex.slice(0, 8), hex.slice(8, 12), hex.slice(12, 16), hex.slice(16, 20), hex.slice(20, 32),
+    ].join('-')
+  }
+
+  const operations = legacyNews
+    .filter(item => typeof item.title === 'string' && typeof item.content === 'string')
+    .map((item) => {
+      const { nid, title, content } = item
+      if (!title || !content) {
+        return null
+      }
+
+      const slug = nid ? buildLegacyPostSlug(nid) : randomUUID()
+      const createdAt = item.createdAt ?? new Date()
+      const updatedAt = item.updatedAt ?? createdAt
+      const isPublished = true
+      const isPinned = false
+      const isHidden = item.status !== 2
+
+      return { updateOne: {
+        filter: { slug },
+        update: { $setOnInsert: {
+          ...(item._id ? { _id: item._id } : {}),
+          slug, title, content, isPublished, isPinned, isHidden, createdAt, updatedAt,
+        } },
+        timestamps: false,
+        upsert: true,
+      } }
+    })
+    .filter((op): op is { updateOne: any } => op !== null)
+
+  if (operations.length === 0) {
+    logger.info('Migration News->Post skipped, no valid legacy rows to migrate')
+    return
+  }
+
+  const result = await Post.bulkWrite(operations, { ordered: false, timestamps: false })
+  logger.info(`Migration News->Post completed, inserted=${result.upsertedCount}, matched=${result.matchedCount}`)
+}
+
 const migrationTasks: MigrationTask[] = [
   {
     key: '20260320-user-storage-quota-default',
@@ -47,6 +110,11 @@ const migrationTasks: MigrationTask[] = [
     key: '20260406-oauth-provider-lowercase',
     description: 'Normalize OAuth.provider from legacy mixed-case values to lowercase enum values',
     run: migrateOAuthProviderToLowercase,
+  },
+  {
+    key: '20260411-news-to-post',
+    description: 'Migrate legacy News collection to Post collection',
+    run: migrateNewsToPost,
   },
 ]
 

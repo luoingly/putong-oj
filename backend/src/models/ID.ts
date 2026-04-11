@@ -3,7 +3,7 @@ import { capitalize } from 'lodash'
 import mongoose from '../config/db'
 
 const idFields = [
-  'Comment', 'Contest', 'Course', 'Discussion', 'Group', 'News', 'Problem',
+  'Comment', 'Contest', 'Course', 'Discussion', 'Group', 'Problem',
   'Solution', 'Tag',
 ]
 
