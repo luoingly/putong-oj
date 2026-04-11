@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto'
+import { TITLE_LENGTH_MAX } from '@putongoj/shared'
 import mongoose from '../config/db'
 
 const postSchema = new mongoose.Schema({
@@ -14,8 +15,8 @@ const postSchema = new mongoose.Schema({
     type: String,
     required: true,
     validate: {
-      validator: (v: string) => v.length >= 1 && v.length <= 300,
-      message: 'Title must be between 1 and 300 characters long',
+      validator: (v: string) => v.length >= 1 && v.length <= TITLE_LENGTH_MAX,
+      message: `Title must be between 1 and ${TITLE_LENGTH_MAX} characters long`,
     },
   },
   content: {
@@ -39,7 +40,7 @@ const postSchema = new mongoose.Schema({
     default: false,
   },
 }, {
-  collection: 'Post',
+  collection: 'Posts',
   timestamps: true,
 })
 
