@@ -85,7 +85,6 @@ async function migrateNewsToPost () {
           ...(item._id ? { _id: item._id } : {}),
           slug, title, content, isPublished, isPinned, isHidden, createdAt, updatedAt,
         } },
-        timestamps: false,
         upsert: true,
       } }
     })
