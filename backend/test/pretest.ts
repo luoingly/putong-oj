@@ -3,7 +3,6 @@ import process from 'node:process'
 import Course from '../src/models/Course'
 import Group from '../src/models/Group'
 import ID from '../src/models/ID'
-import News from '../src/models/News'
 import Problem from '../src/models/Problem'
 import Solution from '../src/models/Solution'
 import User from '../src/models/User'
@@ -14,7 +13,6 @@ import { removeall } from './helper'
 import { courseSeeds } from './seeds/course'
 import { discussionSeeds } from './seeds/discussion'
 import { groupSeeds } from './seeds/group'
-import { newsSeeds } from './seeds/news'
 import { problemSeeds } from './seeds/problem'
 import { solutionSeeds } from './seeds/solution'
 import { userSeeds } from './seeds/user'
@@ -27,7 +25,6 @@ async function main () {
     new ID({ name: 'Course', id: 2 }).save(),
     new ID({ name: 'Discussion', id: 0 }).save(),
     new ID({ name: 'Group', id: 0 }).save(),
-    new ID({ name: 'News', id: 0 }).save(),
     new ID({ name: 'Problem', id: 999 }).save(),
     new ID({ name: 'Solution', id: 0 }).save(),
     new ID({ name: 'Tag', id: 0 }).save(),
@@ -38,9 +35,6 @@ async function main () {
   )
   const groupInsert = Promise.all(
     groupSeeds.map(item => new Group(item).save()),
-  )
-  const newsInsert = Promise.all(
-    newsSeeds.map(item => new News(item).save()),
   )
   const problemInsert = (async () => {
     for (const problem of problemSeeds) {
@@ -63,7 +57,6 @@ async function main () {
   await Promise.all([
     courseInsert,
     groupInsert,
-    newsInsert,
     problemInsert,
     solutionInsert,
     userInsert,
