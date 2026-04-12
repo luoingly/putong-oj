@@ -3,10 +3,15 @@ import type { Context } from 'koa'
 import type { ZodError } from 'zod'
 import type { PaginateOption } from '../types'
 import { Buffer } from 'node:buffer'
+import { randomBytes, scryptSync, timingSafeEqual } from 'node:crypto'
 import { BlockList, isIPv6 } from 'node:net'
 import { md5, sha1 } from '@noble/hashes/legacy.js'
 import { ErrorCode, passwordRegex } from '@putongoj/shared'
 import { pick, pickBy } from 'lodash'
+
+const PASSWORD_HASH_VERSION = 'scrypt'
+const SCRYPT_KEY_LENGTH = 64
+const SCRYPT_SALT_LENGTH = 16
 
 export function parsePaginateOption (
   opt: Record<string, unknown>,
@@ -29,7 +34,7 @@ export function parsePaginateOption (
   return { page, pageSize }
 }
 
-export function passwordHashBuffer (password: string): Buffer {
+function passwordHashBufferLegacy (password: string): Buffer {
   const passwordArr = Uint8Array.from(Buffer.from(password))
 
   const md5Hash = md5(passwordArr)
@@ -43,7 +48,42 @@ export function passwordHashBuffer (password: string): Buffer {
 }
 
 export function passwordHash (password: string): string {
-  return Buffer.from(passwordHashBuffer(password)).toString('hex')
+  const salt = randomBytes(SCRYPT_SALT_LENGTH)
+  const hash = scryptSync(password, salt, SCRYPT_KEY_LENGTH)
+  return `${PASSWORD_HASH_VERSION}$${salt.toString('base64')}$${hash.toString('base64')}`
+}
+
+export function verifyPassword (password: string, storedHash: string): boolean {
+  if (typeof storedHash !== 'string' || storedHash.length === 0) {
+    return false
+  }
+
+  const [ version, saltBase64, hashBase64 ] = storedHash.split('$')
+  if (version === PASSWORD_HASH_VERSION && saltBase64 && hashBase64) {
+    try {
+      const salt = Buffer.from(saltBase64, 'base64')
+      const expectedHash = Buffer.from(hashBase64, 'base64')
+      if (salt.length === 0 || expectedHash.length === 0) {
+        return false
+      }
+
+      const actualHash = scryptSync(password, salt, expectedHash.length)
+      return timingSafeEqual(actualHash, expectedHash)
+    } catch {
+      return false
+    }
+  }
+
+  const expectedLegacyHash = Buffer.from(storedHash, 'hex')
+  const actualLegacyHash = passwordHashBufferLegacy(password)
+  if (expectedLegacyHash.length !== actualLegacyHash.length) {
+    return false
+  }
+  return timingSafeEqual(actualLegacyHash, expectedLegacyHash)
+}
+
+export function needsPasswordRehash (storedHash: string): boolean {
+  return !storedHash.startsWith(`${PASSWORD_HASH_VERSION}$`)
 }
 
 export function isComplexPwd (pwd: string): boolean {
@@ -172,8 +212,9 @@ export function toObjectRecord (value: unknown): Record<string, unknown> {
 
 export default {
   parsePaginateOption,
-  passwordHashBuffer,
   passwordHash,
+  verifyPassword,
+  needsPasswordRehash,
   isComplexPwd,
   only,
   purify,

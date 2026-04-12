@@ -36,6 +36,9 @@ app.use(session({
   key: 'ptoj.session',
   maxAge: config.sessionMaxAge * 1000,
   signed: true,
+  httpOnly: true,
+  sameSite: 'lax',
+  secure: env.NODE_ENV === 'production',
   renew: true,
 }, app))
 

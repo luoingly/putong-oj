@@ -1,6 +1,4 @@
 import type { Context } from 'koa'
-import { Buffer } from 'node:buffer'
-import { timingSafeEqual } from 'node:crypto'
 import Router from '@koa/router'
 import {
   AccountChangePasswordPayloadSchema,
@@ -27,8 +25,9 @@ import {
   createErrorResponse,
   createZodErrorResponse,
   isComplexPwd,
+  needsPasswordRehash,
   passwordHash,
-  passwordHashBuffer,
+  verifyPassword,
 } from '../utils'
 
 export async function getProfile (ctx: Context) {
@@ -52,14 +51,17 @@ export async function userLogin (ctx: Context) {
   } catch {
     return createErrorResponse(ctx, ErrorCode.BadRequest, 'Failed to decrypt password field')
   }
-  const pwdHash = passwordHashBuffer(password)
-
   const user = await userService.getUser(payload.data.username)
   if (!user) {
     return createErrorResponse(ctx, ErrorCode.Unauthorized, 'Username or password is incorrect')
   }
-  if (timingSafeEqual(Buffer.from(user.pwd, 'hex'), pwdHash) === false) {
+  if (!verifyPassword(password, user.pwd)) {
     return createErrorResponse(ctx, ErrorCode.Unauthorized, 'Username or password is incorrect')
+  }
+  if (needsPasswordRehash(user.pwd)) {
+    user.pwd = passwordHash(password)
+    await user.save()
+    ctx.auditLog.info(`<User:${user.uid}> password hash upgraded`)
   }
   if (user.privilege === UserPrivilege.Banned) {
     return createErrorResponse(ctx, ErrorCode.Forbidden, 'Account has been banned, please contact the administrator')
@@ -188,8 +190,7 @@ export async function updatePassword (ctx: Context) {
   if (!isComplexPwd(newPassword)) {
     return createErrorResponse(ctx, ErrorCode.BadRequest, 'New password is not complex enough')
   }
-  const oldPwdHash = passwordHashBuffer(oldPassword)
-  if (timingSafeEqual(Buffer.from(profile.pwd, 'hex'), oldPwdHash) === false) {
+  if (!verifyPassword(oldPassword, profile.pwd)) {
     return createErrorResponse(ctx, ErrorCode.Unauthorized, 'Old password is incorrect')
   }
   const pwd = passwordHash(newPassword)

@@ -1,5 +1,5 @@
 import test from 'ava'
-import helper, { isIpInWhitelist } from '../../src/utils'
+import helper, { isIpInWhitelist, needsPasswordRehash, passwordHash, verifyPassword } from '../../src/utils'
 
 test('Helper purify', (t) => {
   t.deepEqual(helper.purify({
@@ -76,4 +76,18 @@ test('isIpInWhitelist: malformed CIDR entry is skipped gracefully', (t) => {
 test('isIpInWhitelist: IPv4 0.0.0.0/0 matches everything', (t) => {
   t.true(isIpInWhitelist('8.8.8.8', [ { cidr: '0.0.0.0/0' } ]))
   t.true(isIpInWhitelist('192.168.100.200', [ { cidr: '0.0.0.0/0' } ]))
+})
+
+test('passwordHash: uses scrypt format and verifies correctly', (t) => {
+  const hashed = passwordHash('Abcdef1!')
+  t.true(hashed.startsWith('scrypt$'))
+  t.true(verifyPassword('Abcdef1!', hashed))
+  t.false(verifyPassword('Abcdef1?', hashed))
+  t.false(needsPasswordRehash(hashed))
+})
+
+test('verifyPassword: supports legacy md5+sha1 hashes for migration', (t) => {
+  const legacyHash = '7cb0874b9f1f0c527a84243ec4ddf4d12d885f0c978dfbfcf0bb415a17438808859c8694'
+  t.true(verifyPassword('Abcdef1!', legacyHash))
+  t.true(needsPasswordRehash(legacyHash))
 })
