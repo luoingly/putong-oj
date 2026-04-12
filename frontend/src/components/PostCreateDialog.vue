@@ -29,7 +29,7 @@ async function submit () {
   }
 
   submitting.value = true
-  const resp = await createPost(form.value)
+  const resp = await createPost({ title })
   submitting.value = false
 
   if (!resp.success || !resp.data) {
