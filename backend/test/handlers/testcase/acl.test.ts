@@ -201,6 +201,11 @@ test('Admin can still get testcase content', async (t) => {
 test.after.always('cleanup', async () => {
   if (reservedPid) {
     await adminRequest.delete(`/api/problem/${reservedPid}`)
+
+    const reservedDir = path.resolve(__dirname, `../../../data/${reservedPid}`)
+    if (fse.existsSync(reservedDir)) {
+      await fse.remove(reservedDir)
+    }
   }
   if (availablePid) {
     await adminRequest.delete(`/api/problem/${availablePid}`)
