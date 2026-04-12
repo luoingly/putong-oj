@@ -34,7 +34,9 @@ const saving = ref(false)
 const deleting = ref(false)
 
 const hasChanges = computed(() => {
-  if (!post.value) return false
+  if (!post.value) {
+    return false
+  }
   return editingPost.value.title !== post.value.title
     || editingPost.value.slug !== post.value.slug
     || editingPost.value.content !== post.value.content
@@ -44,15 +46,10 @@ const hasChanges = computed(() => {
 })
 
 function setEditingPost () {
-  if (!post.value) return
-  editingPost.value = {
-    title: post.value.title,
-    slug: post.value.slug,
-    content: post.value.content,
-    isPinned: post.value.isPinned ?? false,
-    isHidden: post.value.isHidden ?? false,
-    isPublished: post.value.isPublished ?? false,
+  if (!post.value) {
+    return
   }
+  editingPost.value = post.value
 }
 
 async function fetchPost () {
