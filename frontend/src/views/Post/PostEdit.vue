@@ -49,7 +49,14 @@ function setEditingPost () {
   if (!post.value) {
     return
   }
-  editingPost.value = post.value
+  editingPost.value = {
+    title: post.value.title,
+    slug: post.value.slug,
+    content: post.value.content,
+    isPinned: post.value.isPinned,
+    isHidden: post.value.isHidden,
+    isPublished: post.value.isPublished,
+  }
 }
 
 async function fetchPost () {
