@@ -43,7 +43,7 @@ export async function exportTestcases (ctx: Context) {
   if (!(
     profile.isAdmin
     || (problem.owner && problem.owner.equals(profile._id))
-    || courseService.hasProblemRole(
+    || await courseService.hasProblemRole(
       profile._id, problem._id, 'viewTestcase',
     )
   )) {
@@ -184,7 +184,7 @@ export async function getTestcase (ctx: Context) {
   if (!(
     profile.isAdmin
     || (problem.owner && problem.owner.equals(profile._id))
-    || courseService.hasProblemRole(
+    || await courseService.hasProblemRole(
       profile._id, problem._id, 'viewTestcase',
     )
   )) {
