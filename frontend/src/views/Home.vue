@@ -85,7 +85,7 @@ onRouteQueryUpdate(fetch)
     <div class="bg-(--p-content-background) border border-surface md:rounded-xl shadow-lg">
       <div class="flex items-center justify-between p-6">
         <div class="flex font-semibold gap-4 items-center">
-          <i class="pi pi-megaphone text-2xl" />
+          <i class="p-[4.5px] pi pi-megaphone text-2xl" />
           <h1 class="text-xl">
             {{ t('ptoj.announcements') }}
           </h1>

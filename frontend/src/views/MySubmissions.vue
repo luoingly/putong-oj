@@ -124,7 +124,7 @@ onRouteQueryUpdate(fetch)
   <div class="max-w-6xl p-0">
     <div class="border-b border-surface p-6">
       <div class="flex font-semibold gap-4 items-center mb-4">
-        <i class="pi pi-copy text-2xl" />
+        <i class="p-[4.5px] pi pi-copy text-2xl" />
         <h1 class="text-xl">
           {{ t('ptoj.my_submissions') }}
         </h1>

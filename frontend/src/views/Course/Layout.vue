@@ -86,7 +86,7 @@ onProfileUpdate(fetch)
 <template>
   <div v-if="!courseLoaded" class="max-w-6xl p-0">
     <div class="flex font-semibold gap-4 items-center pt-6 px-6">
-      <i class="pi pi-book text-2xl" />
+      <i class="p-[4.5px] pi pi-book text-2xl" />
       <h1 class="text-xl">
         {{ t('oj.course') }}
       </h1>

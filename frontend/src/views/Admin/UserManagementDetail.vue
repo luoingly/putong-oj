@@ -308,7 +308,7 @@ onRouteParamUpdate(fetch)
 <template>
   <div class="max-w-4xl p-0">
     <div class="flex font-semibold gap-4 items-center pt-6 px-6">
-      <i class="pi pi-user-edit text-2xl" />
+      <i class="p-[4.5px] pi pi-user-edit text-2xl" />
       <h1 class="text-xl">
         {{ t('ptoj.user_management') }}
       </h1>
@@ -477,7 +477,7 @@ onRouteParamUpdate(fetch)
           </div>
 
           <div v-else-if="sessions.length === 0" class="flex gap-4 items-center justify-center p-6">
-            <i class="pi pi-info-circle text-2xl" />
+            <i class="p-[4.5px] pi pi-info-circle text-2xl" />
             <span>{{ t('ptoj.empty_content_desc') }}</span>
           </div>
 

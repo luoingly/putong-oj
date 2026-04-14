@@ -204,7 +204,7 @@ onMounted(fetchDiscussion)
   <div class="max-w-4xl p-0">
     <template v-if="loading || !discussion">
       <div class="flex font-semibold gap-4 items-center pt-6 px-6">
-        <i class="pi pi-comments text-2xl" />
+        <i class="p-[4.5px] pi pi-comments text-2xl" />
         <h1 class="text-xl">
           {{ t('ptoj.discussion') }}
         </h1>

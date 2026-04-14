@@ -61,7 +61,7 @@ onRouteQueryUpdate(fetch)
     <div class="p-6">
       <div class="flex gap-4 items-center justify-between">
         <div class="flex font-semibold gap-4 items-center">
-          <i class="pi pi-book text-2xl" />
+          <i class="p-[4.5px] pi pi-book text-2xl" />
           <h1 class="text-xl">
             {{ t('oj.course') }}
           </h1>

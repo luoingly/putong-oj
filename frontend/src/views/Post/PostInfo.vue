@@ -42,7 +42,7 @@ watch(() => route.params.slug, fetchPost)
   <div class="max-w-6xl p-0">
     <div class="flex items-center justify-between pt-6 px-6">
       <div class="flex font-semibold gap-4 items-center">
-        <i class="pi pi-megaphone text-2xl" />
+        <i class="p-[4.5px] pi pi-megaphone text-2xl" />
         <h1 class="text-xl">
           {{ t('ptoj.announcement') }}
         </h1>

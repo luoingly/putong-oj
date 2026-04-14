@@ -162,7 +162,7 @@ function del (event: Event) {
 <template>
   <div class="max-w-6xl p-0">
     <div class="flex font-semibold gap-4 items-center pt-6 px-6">
-      <i class="pi pi-file-edit text-2xl" />
+      <i class="p-[4.5px] pi pi-file-edit text-2xl" />
       <h1 class="text-xl">
         {{ t('ptoj.edit_post') }}
       </h1>
