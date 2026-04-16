@@ -160,17 +160,6 @@ export interface SolutionEntity extends Entity {
   }[]
 }
 
-// News
-
-export interface NewsEntity extends Entity {
-  nid: number
-  title: string
-  content: string
-  status: number
-  /** @deprecated Use `createdAt` instead */
-  create: number
-}
-
 // Group
 
 export interface GroupEntity extends Entity {

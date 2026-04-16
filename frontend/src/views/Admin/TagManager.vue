@@ -157,7 +157,7 @@ onBeforeMount(fetch)
     <!-- Header -->
     <div class="border-b border-surface flex gap-4 items-center justify-between p-6">
       <div class="flex font-semibold gap-4 items-center">
-        <i class="pi pi-tags text-2xl" />
+        <i class="p-[4.5px] pi pi-tags text-2xl" />
         <h1 class="text-xl">
           Tag Management
         </h1>

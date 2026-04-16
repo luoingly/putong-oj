@@ -87,7 +87,7 @@ function onSendNotification (event: Event) {
 <template>
   <div class="max-w-4xl p-6">
     <div class="flex font-semibold gap-4 items-center mb-4">
-      <i class="pi pi-send text-2xl" />
+      <i class="p-[4.5px] pi pi-send text-2xl" />
       <h1 class="text-xl">
         {{ t('ptoj.create_notification') }}
       </h1>

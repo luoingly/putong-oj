@@ -57,11 +57,6 @@ export async function loadProblemState (ctx: Context, inputId?: string | number,
     return buildProblemState(ctx, problem)
   }
 
-  /**
-   * @todo If a non-public problem is added to a public course, any users gain access to it
-   * through this course. However, since users viewing public courses are not recorded as members,
-   * this role relationship cannot be found by this function.
-   */
   if (profile && await courseService.hasProblemRole(profile._id, problem._id, 'basic')) {
     return buildProblemState(ctx, problem)
   }

@@ -1,5 +1,6 @@
 import type Redis from 'ioredis'
 import type { Types } from 'mongoose'
+import { randomUUID } from 'node:crypto'
 import NodeCache from 'node-cache'
 import redis from '../config/redis'
 
@@ -7,11 +8,16 @@ const MEMORY_CACHE_TTL = 3
 const REDIS_CACHE_TTL = 5
 
 const MEMORY_CHECK_PERIOD = 60
-const REDIS_LOCK_TTL = 60
-const REDIS_LOCK_RETRY = 50 // in milliseconds
+const REDIS_LOCK_TTL = 10
+const REDIS_LOCK_RETRY_MS = 100
+const REDIS_LOCK_MAX_RETRIES = 100
 
 interface CacheOptions {
-  ttl?: number
+  skipMemoryCache?: boolean
+}
+
+interface CacheCreationOptions extends CacheOptions {
+  redisTtl?: number
 }
 
 class CacheService {
@@ -26,33 +32,46 @@ class CacheService {
     this.redisClient = redis
   }
 
-  public async get<T>(key: string): Promise<T | null> {
-    const memoryValue = this.memoryCache.get<T>(key)
-    if (memoryValue !== undefined) {
-      return memoryValue
+  public async get<T>(
+    key: string,
+    opt?: CacheOptions,
+  ): Promise<T | null> {
+    const skipMemoryCache = this.shouldSkipMemoryCache(opt)
+
+    if (!skipMemoryCache) {
+      const memoryValue = this.memoryCache.get<T>(key)
+      if (memoryValue !== undefined) {
+        return memoryValue
+      }
     }
 
     const redisValue = await this.redisClient.get(key)
-    const result = this.tryDecode<T>(redisValue)
-    if (result !== null) {
-      this.memoryCache.set(key, result)
+    const value = this.tryDecode<T>(redisValue)
+    if (value !== null && !skipMemoryCache) {
+      this.memoryCache.set(key, value)
     }
 
-    return result
+    return value
   }
 
   public async getOrCreate<T>(
     key: string,
     func: () => Promise<T>,
-    opt?: CacheOptions,
+    opt?: CacheCreationOptions,
   ): Promise<T> {
-    let value = this.memoryCache.get<T>(key)
-    if (value !== undefined) {
-      return value
+    const skipMemoryCache = this.shouldSkipMemoryCache(opt)
+
+    if (!skipMemoryCache) {
+      const memoryValue = this.memoryCache.get<T>(key)
+      if (memoryValue !== undefined) {
+        return memoryValue
+      }
     }
 
-    value = await this.getOrCreateFromRedisCache<T>(key, func, opt)
-    this.memoryCache.set(key, value)
+    const value = await this.getOrCreateFromRedisCache<T>(key, func, opt)
+    if (!skipMemoryCache) {
+      this.memoryCache.set(key, value)
+    }
 
     return value
   }
@@ -62,43 +81,39 @@ class CacheService {
     this.memoryCache.del(key)
   }
 
-  async getOrCreateFromRedisCache<T>(
+  private async getOrCreateFromRedisCache<T>(
     key: string,
     func: () => Promise<T>,
-    opt?: CacheOptions,
+    opt?: CacheCreationOptions,
   ): Promise<T> {
-    let value = await this.redisClient.get(key)
-    let result: T | null = null
+    let redisValue = await this.redisClient.get(key)
+    let value = this.tryDecode<T>(redisValue)
 
-    // hit the cache
-    result = this.tryDecode<T>(value)
-    if (result !== null) {
-      return result
+    if (value !== null) {
+      return value
     }
 
-    // wait if updating
-    value = await this.waitLock(key)
-    result = this.tryDecode<T>(value)
-    if (result !== null) {
-      return result
-    }
-
-    await this.setLock(key)
+    const lockToken = await this.acquireLock(key)
 
     try {
-      result = await func()
-      value = JSON.stringify(result)
+      redisValue = await this.redisClient.get(key)
+      value = this.tryDecode<T>(redisValue)
 
-      const ttl = opt?.ttl ?? REDIS_CACHE_TTL
-      await this.redisClient.set(key, value, 'EX', ttl)
+      if (value === null) {
+        value = await func()
+
+        const ttl = opt?.redisTtl ?? REDIS_CACHE_TTL
+        await this.redisClient.set(key, JSON.stringify(value), 'EX', ttl)
+      }
     } finally {
-      await this.releaseLock(key)
+      // always release lock
+      await this.releaseLock(key, lockToken)
     }
 
-    return result
+    return value
   }
 
-  tryDecode<T>(value: string | null): T | null {
+  private tryDecode<T>(value: string | null): T | null {
     if (value === null) {
       return null
     }
@@ -110,30 +125,35 @@ class CacheService {
     }
   }
 
-  async waitLock (key: string): Promise<string | null> {
+  private async acquireLock (key: string): Promise<string> {
     const lockKey = CacheKey.updateLock(key)
+    const token = randomUUID()
 
-    let lockValue = await this.redisClient.get(lockKey)
-    if (lockValue === null) {
-      return null
+    for (let i = 0; i < REDIS_LOCK_MAX_RETRIES; i++) {
+      const result = await this.redisClient.set(lockKey, token, 'EX', REDIS_LOCK_TTL, 'NX')
+      if (result === 'OK') {
+        return token
+      }
+
+      await new Promise(resolve => setTimeout(resolve, REDIS_LOCK_RETRY_MS))
     }
 
-    while (lockValue !== null) {
-      await new Promise(resolve => setTimeout(resolve, REDIS_LOCK_RETRY))
-      lockValue = await this.redisClient.get(lockKey)
-    }
-
-    return await this.redisClient.get(key)
+    throw new Error(`Failed to acquire lock for key: ${key}`)
   }
 
-  async setLock (lock: string): Promise<void> {
+  private async releaseLock (lock: string, token: string): Promise<void> {
     const lockKey = CacheKey.updateLock(lock)
-    await this.redisClient.set(lockKey, '', 'EX', REDIS_LOCK_TTL, 'NX')
+    await this.redisClient.eval(`
+      if redis.call("get", KEYS[1]) == ARGV[1] then
+        return redis.call("del", KEYS[1])
+      else
+        return 0
+      end
+    `, 1, lockKey, token)
   }
 
-  async releaseLock (lock: string): Promise<void> {
-    const lockKey = CacheKey.updateLock(lock)
-    await this.redisClient.del(lockKey)
+  private shouldSkipMemoryCache (opt?: CacheOptions): boolean {
+    return opt?.skipMemoryCache ?? false
   }
 }
 

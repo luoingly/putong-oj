@@ -53,7 +53,7 @@ const { profile, isRoot } = storeToRefs(sessionStore)
 const uid = computed(() => route.params.uid as string)
 const user = ref<AdminUserDetailQueryResult | null>(null)
 const editingUser = ref<AdminUserEditPayload>({})
-const connections = ref<AdminUserOAuthQueryResult>({ CJLU: null, Codeforces: null })
+const connections = ref<AdminUserOAuthQueryResult>({ cjlu: null, codeforces: null })
 const loading = ref(false)
 const saving = ref(false)
 const savingQuota = ref(false)
@@ -308,7 +308,7 @@ onRouteParamUpdate(fetch)
 <template>
   <div class="max-w-4xl p-0">
     <div class="flex font-semibold gap-4 items-center pt-6 px-6">
-      <i class="pi pi-user-edit text-2xl" />
+      <i class="p-[4.5px] pi pi-user-edit text-2xl" />
       <h1 class="text-xl">
         {{ t('ptoj.user_management') }}
       </h1>
@@ -412,18 +412,18 @@ onRouteParamUpdate(fetch)
                 {{ t('ptoj.cjlu_sso') }}
               </div>
               <div class="text-muted-color text-sm">
-                <span v-if="connections.CJLU">
+                <span v-if="connections.cjlu">
                   {{ t('ptoj.connected_to_detail', {
-                    id: connections.CJLU.providerId,
-                    name: connections.CJLU.displayName,
-                    time: timePretty(connections.CJLU.createdAt),
+                    id: connections.cjlu.providerId,
+                    name: connections.cjlu.displayName,
+                    time: timePretty(connections.cjlu.createdAt),
                   }) }}
                 </span>
                 <span v-else>{{ t('ptoj.not_connected') }}</span>
               </div>
             </div>
             <Button
-              v-if="connections.CJLU" :label="t('ptoj.disconnect')" severity="danger" outlined
+              v-if="connections.cjlu" :label="t('ptoj.disconnect')" severity="danger" outlined
               :disabled="!canOperate || !isRoot" class="min-w-fit"
               @click="event => disconnectOAuth(event, OAuthProvider.CJLU)"
             />
@@ -434,18 +434,18 @@ onRouteParamUpdate(fetch)
                 {{ t('ptoj.codeforces') }}
               </div>
               <div class="text-muted-color text-sm">
-                <span v-if="connections.Codeforces">
+                <span v-if="connections.codeforces">
                   {{ t('ptoj.connected_to_detail', {
-                    id: connections.Codeforces.displayName,
-                    name: connections.Codeforces.providerId.slice(0, 7),
-                    time: timePretty(connections.Codeforces.createdAt),
+                    id: connections.codeforces.displayName,
+                    name: connections.codeforces.providerId.slice(0, 7),
+                    time: timePretty(connections.codeforces.createdAt),
                   }) }}
                 </span>
                 <span v-else>{{ t('ptoj.not_connected') }}</span>
               </div>
             </div>
             <Button
-              v-if="connections.Codeforces" :label="t('ptoj.disconnect')" severity="danger" outlined
+              v-if="connections.codeforces" :label="t('ptoj.disconnect')" severity="danger" outlined
               :disabled="!canOperate || !isRoot" class="min-w-fit"
               @click="event => disconnectOAuth(event, OAuthProvider.Codeforces)"
             />
@@ -477,7 +477,7 @@ onRouteParamUpdate(fetch)
           </div>
 
           <div v-else-if="sessions.length === 0" class="flex gap-4 items-center justify-center p-6">
-            <i class="pi pi-info-circle text-2xl" />
+            <i class="p-[4.5px] pi pi-info-circle text-2xl" />
             <span>{{ t('ptoj.empty_content_desc') }}</span>
           </div>
 

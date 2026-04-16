@@ -2,6 +2,7 @@ import type { UserDocument } from '../models/User'
 import type { ContestState } from '../policies/contest'
 import type { CourseState } from '../policies/course'
 import type { DiscussionState } from '../policies/discussion'
+import type { PostState } from '../policies/post'
 import type { ProblemState } from '../policies/problem'
 import 'koa'
 
@@ -16,6 +17,7 @@ declare module 'koa' {
     contest?: ContestState
     course?: CourseState
     discussion?: DiscussionState
+    post?: PostState
     problem?: ProblemState
     user?: UserDocument
   }

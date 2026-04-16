@@ -74,7 +74,7 @@ onRouteParamUpdate(fetch)
   <div class="max-w-7xl p-0">
     <template v-if="loading || !user">
       <div class="flex font-semibold gap-4 items-center pt-6 px-6">
-        <i class="pi pi-user text-2xl" />
+        <i class="p-[4.5px] pi pi-user text-2xl" />
         <h1 class="text-xl">
           {{ t('ptoj.user_profile') }}
         </h1>

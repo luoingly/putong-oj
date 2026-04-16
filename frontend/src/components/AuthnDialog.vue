@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import type { ErrorEnveloped, OAuthAction, OAuthProvider } from '@putongoj/shared'
-import { ErrorCode, passwordRegex } from '@putongoj/shared'
+import type { ErrorEnveloped } from '@putongoj/shared'
+import { ErrorCode, OAuthAction, OAuthProvider, passwordRegex } from '@putongoj/shared'
 import { storeToRefs } from 'pinia'
 import Button from 'primevue/button'
 import Dialog from 'primevue/dialog'
@@ -166,9 +166,13 @@ function closeModal () {
   authnDialogVisible.value = false
 }
 
-async function handleOAuthLogin (provider: Lowercase<OAuthProvider>) {
-  const url = await generateOAuthUrl(provider, { action: 'login' as OAuthAction })
-  window.open(url.url, '_self', 'noopener,noreferrer')
+async function handleOAuthLogin (provider: OAuthProvider) {
+  const resp = await generateOAuthUrl(provider, { action: OAuthAction.LOGIN })
+  if (!resp.success) {
+    handleAuthError(resp)
+    return
+  }
+  window.open(resp.data.url, '_self', 'noopener,noreferrer')
 }
 
 watch(authnDialog, (newValue) => {
@@ -187,15 +191,15 @@ watch(authnDialogVisible, (newValue) => {
     class="max-w-md mx-6 w-full" @hide="closeModal"
   >
     <template #header>
-      <div class="font-semibold pl-[35px] text-center text-xl w-full">
+      <div class="font-semibold pl-10 text-center text-xl w-full">
         {{ isLogin ? t('ptoj.login') : t('ptoj.register') }}
       </div>
     </template>
 
     <div v-if="hasOAuthEnabled && isLogin">
       <Button
-        v-if="config.oauthEnabled.CJLU" severity="secondary" size="large" outlined fluid
-        @click="handleOAuthLogin('cjlu')"
+        v-if="config.oauthEnabled.cjlu" severity="secondary" size="large" outlined fluid
+        @click="handleOAuthLogin(OAuthProvider.CJLU)"
       >
         {{ t('ptoj.cjlu_sso') }}
       </Button>

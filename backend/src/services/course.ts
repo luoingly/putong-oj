@@ -195,6 +195,12 @@ export async function getUserRole (
         .lean()
       if (userPerm) {
         role = Object.assign(role, userPerm.role)
+      } else if (course.encrypt === encrypt.Public) {
+        /**
+         * @todo a temporary solution to make sure the basic role is granted to public course visitors,
+         * may consider introducing a new course join mechanism, instead of auto joining at first visit.
+         */
+        await updateCourseMember(course._id, profile._id, { ...courseRoleNone, basic: true })
       }
     }
   }

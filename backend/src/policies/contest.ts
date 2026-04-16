@@ -1,6 +1,6 @@
 import type { ContestModel } from '@putongoj/shared'
 import type { Context } from 'koa'
-import type { WithId } from 'src/types'
+import type { WithId } from '../types'
 import { ParticipationStatus } from '@putongoj/shared'
 import { loadProfile } from '../middlewares/authn'
 import Contest from '../models/Contest'

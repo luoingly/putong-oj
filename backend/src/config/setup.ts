@@ -19,7 +19,6 @@ export async function databaseSetup () {
     Course: 0,
     Discussion: 0,
     Group: 0,
-    News: 0,
     Problem: 999,
     Solution: 0,
     Tag: 0,

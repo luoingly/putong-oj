@@ -1,6 +1,6 @@
 import type { OAuthConnection } from '@putongoj/shared'
 import type { Document, Model, Types } from 'mongoose'
-import type { Entity, View } from '../types/entity'
+import type { Entity } from '../types/entity'
 import type { UserDocument } from './User'
 import mongoose from '../config/db'
 
@@ -8,19 +8,13 @@ export interface OAuthEntity extends Entity, OAuthConnection {
   user: Types.ObjectId
 }
 
-export type OAuthEntityUserView = View & Pick<OAuthEntity,
-  'providerId' | 'displayName'
->
-
 export type OAuthDocument = Document<Types.ObjectId> & OAuthEntity
 
 export type OAuthDocumentPopulated = OAuthDocument & {
   user: UserDocument
 }
 
-type OAuthModel = Model<OAuthDocument> & {
-  toUserView: (oauth: Partial<OAuthEntity>) => OAuthEntityUserView
-}
+type OAuthModel = Model<OAuthDocument>
 
 const oauthSchema = new mongoose.Schema({
   user: {
@@ -64,17 +58,6 @@ const oauthSchema = new mongoose.Schema({
 
 oauthSchema.index({ user: 1, provider: 1 }, { unique: true })
 oauthSchema.index({ provider: 1, providerId: 1 }, { unique: true })
-
-const toUserView = (oauth: Partial<OAuthEntity>): OAuthEntityUserView => {
-  return {
-    providerId: oauth.providerId ?? 'Unknown',
-    displayName: oauth.displayName ?? 'Unknown',
-    createdAt: new Date(oauth?.createdAt ?? Date.now()).getTime(),
-    updatedAt: new Date(oauth?.updatedAt ?? Date.now()).getTime(),
-  }
-}
-
-oauthSchema.statics.toUserView = toUserView
 
 const OAuth
   = mongoose.model<OAuthDocument, OAuthModel>(

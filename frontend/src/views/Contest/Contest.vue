@@ -34,7 +34,7 @@ onMounted(fetch)
 <template>
   <div v-if="!contestLoaded" class="max-w-6xl p-0">
     <div class="flex font-semibold gap-4 items-center pt-6 px-6">
-      <i class="pi pi-trophy text-2xl" />
+      <i class="p-[4.5px] pi pi-trophy text-2xl" />
       <h1 class="text-xl">
         {{ t('ptoj.contest') }}
       </h1>
