@@ -33,20 +33,3 @@ export const PostDetailQueryResultSchema = z.object({
 })
 
 export type PostDetailQueryResult = z.input<typeof PostDetailQueryResultSchema>
-
-export const PostCreatePayloadSchema = z.object({
-  title: PostModelSchema.shape.title,
-})
-
-export type PostCreatePayload = z.infer<typeof PostCreatePayloadSchema>
-
-export const PostUpdatePayloadSchema = z.object({
-  title: PostModelSchema.shape.title.optional(),
-  content: PostModelSchema.shape.content.optional(),
-  slug: PostModelSchema.shape.slug.optional(),
-  isPublished: PostModelSchema.shape.isPublished.optional(),
-  isPinned: PostModelSchema.shape.isPinned.optional(),
-  isHidden: PostModelSchema.shape.isHidden.optional(),
-})
-
-export type PostUpdatePayload = z.infer<typeof PostUpdatePayloadSchema>

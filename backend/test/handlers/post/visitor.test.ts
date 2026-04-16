@@ -10,11 +10,11 @@ const request = supertest.agent(server)
 
 async function createAndUpdatePost (title: string, update: Record<string, any>) {
   const create = await adminRequest
-    .post('/api/posts')
+    .post('/api/admin/posts')
     .send({ title })
 
   const slug = create.body.data.slug as string
-  await adminRequest.put(`/api/post/${slug}`).send(update)
+  await adminRequest.put(`/api/admin/posts/${slug}`).send(update)
   return slug
 }
 
@@ -62,7 +62,7 @@ test.serial('Visitor list only shows published and non-hidden posts', async (t) 
 })
 
 test.serial('Visitor can access published post by slug even if hidden', async (t) => {
-  const res = await request.get(`/api/post/${hiddenPublishedSlug}`)
+  const res = await request.get(`/api/posts/${hiddenPublishedSlug}`)
 
   t.is(res.status, 200)
   t.true(res.body.success)
@@ -71,7 +71,7 @@ test.serial('Visitor can access published post by slug even if hidden', async (t
 })
 
 test.serial('Visitor cannot access unpublished post by slug', async (t) => {
-  const res = await request.get(`/api/post/${visibleDraftSlug}`)
+  const res = await request.get(`/api/posts/${visibleDraftSlug}`)
 
   t.is(res.status, 200)
   t.false(res.body.success)
@@ -80,7 +80,7 @@ test.serial('Visitor cannot access unpublished post by slug', async (t) => {
 
 test.serial('Visitor cannot create post', async (t) => {
   const res = await request
-    .post('/api/posts')
+    .post('/api/admin/posts')
     .send({
       title: 'Unauthorized Post',
     })
@@ -92,7 +92,7 @@ test.serial('Visitor cannot create post', async (t) => {
 
 test.serial('Visitor cannot update post', async (t) => {
   const res = await request
-    .put(`/api/post/${visiblePublishedSlug}`)
+    .put(`/api/admin/posts/${visiblePublishedSlug}`)
     .send({
       title: 'Unauthorized Update',
     })
@@ -104,7 +104,7 @@ test.serial('Visitor cannot update post', async (t) => {
 
 test.serial('Visitor cannot delete post', async (t) => {
   const res = await request
-    .delete(`/api/post/${visiblePublishedSlug}`)
+    .delete(`/api/admin/posts/${visiblePublishedSlug}`)
 
   t.is(res.status, 200)
   t.false(res.body.success)

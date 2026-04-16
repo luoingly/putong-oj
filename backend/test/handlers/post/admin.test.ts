@@ -22,7 +22,7 @@ test.before(async () => {
 
 test.serial('Admin can create a post with default flags', async (t) => {
   const res = await request
-    .post('/api/posts')
+    .post('/api/admin/posts')
     .send({ title: 'Admin Create Default Flags' })
 
   t.is(res.status, 200)
@@ -30,7 +30,7 @@ test.serial('Admin can create a post with default flags', async (t) => {
   t.truthy(res.body.data.slug)
 
   const slug = res.body.data.slug as string
-  const find = await request.get(`/api/post/${slug}`)
+  const find = await request.get(`/api/posts/${slug}`)
 
   t.is(find.status, 200)
   t.true(find.body.success)
@@ -43,7 +43,7 @@ test.serial('Admin can create a post with default flags', async (t) => {
 
 test.serial('Admin can update isPublished, isPinned, and isHidden', async (t) => {
   const create = await request
-    .post('/api/posts')
+    .post('/api/admin/posts')
     .send({ title: 'Admin Update Flags' })
 
   t.is(create.status, 200)
@@ -51,7 +51,7 @@ test.serial('Admin can update isPublished, isPinned, and isHidden', async (t) =>
   const slug = create.body.data.slug as string
 
   const update = await request
-    .put(`/api/post/${slug}`)
+    .put(`/api/admin/posts/${slug}`)
     .send({
       isPublished: true,
       isPinned: true,
@@ -63,7 +63,7 @@ test.serial('Admin can update isPublished, isPinned, and isHidden', async (t) =>
   t.is(update.status, 200)
   t.true(update.body.success)
 
-  const find = await request.get(`/api/post/${slug}`)
+  const find = await request.get(`/api/posts/${slug}`)
   t.is(find.status, 200)
   t.true(find.body.success)
   t.is(find.body.data.title, 'Admin Update Flags Updated')
@@ -74,9 +74,9 @@ test.serial('Admin can update isPublished, isPinned, and isHidden', async (t) =>
 })
 
 test.serial('Admin list includes hidden and unpublished posts', async (t) => {
-  const visiblePublished = await request.post('/api/posts').send({ title: 'Admin List Visible Published' })
-  const hiddenPublished = await request.post('/api/posts').send({ title: 'Admin List Hidden Published' })
-  const visibleDraft = await request.post('/api/posts').send({ title: 'Admin List Visible Draft' })
+  const visiblePublished = await request.post('/api/admin/posts').send({ title: 'Admin List Visible Published' })
+  const hiddenPublished = await request.post('/api/admin/posts').send({ title: 'Admin List Hidden Published' })
+  const visibleDraft = await request.post('/api/admin/posts').send({ title: 'Admin List Visible Draft' })
 
   t.is(visiblePublished.status, 200)
   t.true(visiblePublished.body.success)
@@ -89,21 +89,21 @@ test.serial('Admin list includes hidden and unpublished posts', async (t) => {
   const hiddenPublishedSlug = hiddenPublished.body.data.slug as string
   const visibleDraftSlug = visibleDraft.body.data.slug as string
 
-  await request.put(`/api/post/${visiblePublishedSlug}`).send({
+  await request.put(`/api/admin/posts/${visiblePublishedSlug}`).send({
     isPublished: true,
     isHidden: false,
     isPinned: true,
   })
-  await request.put(`/api/post/${hiddenPublishedSlug}`).send({
+  await request.put(`/api/admin/posts/${hiddenPublishedSlug}`).send({
     isPublished: true,
     isHidden: true,
   })
-  await request.put(`/api/post/${visibleDraftSlug}`).send({
+  await request.put(`/api/admin/posts/${visibleDraftSlug}`).send({
     isPublished: false,
     isHidden: false,
   })
 
-  const list = await request.get('/api/posts')
+  const list = await request.get('/api/admin/posts')
   t.is(list.status, 200)
   t.true(list.body.success)
 
@@ -123,30 +123,43 @@ test.serial('Admin list includes hidden and unpublished posts', async (t) => {
 
   t.is(bySlug.get(visibleDraftSlug)?.isPublished, false)
   t.is(bySlug.get(visibleDraftSlug)?.isHidden, false)
+
+  const hiddenOnly = await request.get('/api/admin/posts').query({ isHidden: true })
+  t.is(hiddenOnly.status, 200)
+  t.true(hiddenOnly.body.success)
+  const hiddenDocs = hiddenOnly.body.data.docs as Array<{ slug: string }>
+  t.true(hiddenDocs.some(doc => doc.slug === hiddenPublishedSlug))
+  t.false(hiddenDocs.some(doc => doc.slug === visiblePublishedSlug))
+
+  const titleSearch = await request.get('/api/admin/posts').query({ title: 'Visible Draft' })
+  t.is(titleSearch.status, 200)
+  t.true(titleSearch.body.success)
+  const titleDocs = titleSearch.body.data.docs as Array<{ slug: string }>
+  t.true(titleDocs.some(doc => doc.slug === visibleDraftSlug))
 })
 
 test.serial('Admin root can delete a post', async (t) => {
   const create = await request
-    .post('/api/posts')
+    .post('/api/admin/posts')
     .send({ title: 'Admin Delete Post' })
 
   t.is(create.status, 200)
   t.true(create.body.success)
   const slug = create.body.data.slug as string
 
-  const del = await request.delete(`/api/post/${slug}`)
+  const del = await request.delete(`/api/admin/posts/${slug}`)
   t.is(del.status, 200)
   t.true(del.body.success)
 
-  const find = await request.get(`/api/post/${slug}`)
+  const find = await request.get(`/api/posts/${slug}`)
   t.is(find.status, 200)
   t.false(find.body.success)
   t.is(find.body.code, 404)
 })
 
 test.serial('Admin cannot update post to a duplicate slug', async (t) => {
-  const first = await request.post('/api/posts').send({ title: 'Duplicate Slug A' })
-  const second = await request.post('/api/posts').send({ title: 'Duplicate Slug B' })
+  const first = await request.post('/api/admin/posts').send({ title: 'Duplicate Slug A' })
+  const second = await request.post('/api/admin/posts').send({ title: 'Duplicate Slug B' })
 
   t.is(first.status, 200)
   t.true(first.body.success)
@@ -157,7 +170,7 @@ test.serial('Admin cannot update post to a duplicate slug', async (t) => {
   const secondSlug = second.body.data.slug as string
 
   const update = await request
-    .put(`/api/post/${secondSlug}`)
+    .put(`/api/admin/posts/${secondSlug}`)
     .send({ slug: firstSlug })
 
   t.is(update.status, 200)
@@ -167,7 +180,7 @@ test.serial('Admin cannot update post to a duplicate slug', async (t) => {
 
 test.serial('Admin update on missing post returns not found', async (t) => {
   const res = await request
-    .put('/api/post/non-existent-slug')
+    .put('/api/admin/posts/non-existent-slug')
     .send({ title: 'Does not matter' })
 
   t.is(res.status, 200)
@@ -176,7 +189,7 @@ test.serial('Admin update on missing post returns not found', async (t) => {
 })
 
 test.serial('Admin delete on missing post returns not found', async (t) => {
-  const res = await request.delete('/api/post/non-existent-slug')
+  const res = await request.delete('/api/admin/posts/non-existent-slug')
 
   t.is(res.status, 200)
   t.false(res.body.success)
@@ -185,7 +198,7 @@ test.serial('Admin delete on missing post returns not found', async (t) => {
 
 test.serial('Admin create fails with invalid payload', async (t) => {
   const res = await request
-    .post('/api/posts')
+    .post('/api/admin/posts')
     .send({})
 
   t.is(res.status, 200)
