@@ -1,5 +1,7 @@
+import type { PostModel } from '@putongoj/shared'
 import type { Context } from 'koa'
 import type { DiscussionUpdateDto } from '../services/discussion'
+import type { QueryFilter } from '../types/mongo'
 import Router from '@koa/router'
 import {
   AdminCommentUpdatePayloadSchema,
@@ -10,6 +12,11 @@ import {
   AdminGroupDetailQueryResultSchema,
   AdminGroupMembersUpdatePayloadSchema,
   AdminNotificationCreatePayloadSchema,
+  AdminPostCreatePayloadSchema,
+  AdminPostDetailQueryResultSchema,
+  AdminPostListQueryResultSchema,
+  AdminPostListQuerySchema,
+  AdminPostUpdatePayloadSchema,
   AdminSolutionListExportQueryResultSchema,
   AdminSolutionListExportQuerySchema,
   AdminSolutionListQueryResultSchema,
@@ -28,15 +35,18 @@ import {
   SessionListQueryResultSchema,
   SessionRevokeOthersResultSchema,
 } from '@putongoj/shared'
+import { escapeRegExp } from 'lodash'
 import { distributeWork } from '../jobs/helper'
 import { adminRequire, loadProfile, rootRequire } from '../middlewares/authn'
 import { dataExportLimit } from '../middlewares/ratelimit'
+import { loadPost } from '../policies/post'
 import { contestService } from '../services/contest'
 import cryptoService from '../services/crypto'
 import discussionService from '../services/discussion'
 import fileService from '../services/file'
 import groupService from '../services/group'
 import oauthService from '../services/oauth'
+import { postService } from '../services/post'
 import problemService from '../services/problem'
 import sessionService from '../services/session'
 import { settingsService } from '../services/settings'
@@ -201,6 +211,121 @@ export async function exportSolutions (ctx: Context) {
   const solutions = await solutionService.exportSolutions(query.data)
   const result = AdminSolutionListExportQueryResultSchema.encode(solutions)
   return createEnvelopedResponse(ctx, result)
+}
+
+export async function findPosts (ctx: Context) {
+  const query = AdminPostListQuerySchema.safeParse(ctx.request.query)
+  if (!query.success) {
+    return createZodErrorResponse(ctx, query.error)
+  }
+
+  const { page, pageSize, sort, sortBy, title, isPublished, isPinned, isHidden } = query.data
+  const filters: QueryFilter<PostModel> = {}
+  if (title) {
+    filters.title = { $regex: escapeRegExp(title), $options: 'i' }
+  }
+  if (isPublished !== undefined) {
+    filters.isPublished = isPublished
+  }
+  if (isPinned !== undefined) {
+    filters.isPinned = isPinned
+  }
+  if (isHidden !== undefined) {
+    filters.isHidden = isHidden
+  }
+  const posts = await postService.findPosts(
+    { page, pageSize, sort, sortBy },
+    filters)
+  const result = AdminPostListQueryResultSchema.encode(posts)
+  return createEnvelopedResponse(ctx, result)
+}
+
+export async function getPost (ctx: Context) {
+  await loadProfile(ctx)
+  const postState = await loadPost(ctx)
+  if (!postState) {
+    return createErrorResponse(ctx, ErrorCode.NotFound, 'Post not found')
+  }
+
+  const result = AdminPostDetailQueryResultSchema.encode(postState.post)
+  return createEnvelopedResponse(ctx, result)
+}
+
+export async function createPost (ctx: Context) {
+  const payload = AdminPostCreatePayloadSchema.safeParse(ctx.request.body)
+  if (!payload.success) {
+    return createZodErrorResponse(ctx, payload.error)
+  }
+
+  const profile = await loadProfile(ctx)
+  const { title } = payload.data
+
+  try {
+    const post = await postService.createPost({ title })
+    ctx.auditLog.info(`<Post:${post.slug}> created by <User:${profile.uid}>`)
+    return createEnvelopedResponse(ctx, { slug: post.slug })
+  } catch (err: any) {
+    ctx.auditLog.error('Failed to create post', err)
+    if (err.code === 11000) {
+      return createErrorResponse(ctx, ErrorCode.BadRequest, 'Slug already exists')
+    }
+    return createErrorResponse(ctx, ErrorCode.InternalServerError)
+  }
+}
+
+export async function updatePost (ctx: Context) {
+  const payload = AdminPostUpdatePayloadSchema.safeParse(ctx.request.body)
+  if (!payload.success) {
+    return createZodErrorResponse(ctx, payload.error)
+  }
+
+  const profile = await loadProfile(ctx)
+  const postState = await loadPost(ctx)
+  if (!postState) {
+    return createErrorResponse(ctx, ErrorCode.NotFound, 'Post not found')
+  }
+  const { slug } = payload.data
+  const post = postState.post
+
+  try {
+    if (slug && slug !== post.slug) {
+      const exists = await postService.isSlugTaken(slug, post._id)
+      if (exists) {
+        return createErrorResponse(ctx, ErrorCode.BadRequest, 'Slug already exists')
+      }
+    }
+
+    const updated = await postService.updatePostById(post._id, payload.data)
+    if (!updated) {
+      return createErrorResponse(ctx, ErrorCode.NotFound, 'Post not found')
+    }
+
+    ctx.auditLog.info(`<Post:${updated.slug}> updated by <User:${profile.uid}>`)
+    return createEnvelopedResponse(ctx, { slug: updated.slug })
+  } catch (err: any) {
+    ctx.auditLog.error('Failed to update post', err)
+    if (err.code === 11000) {
+      return createErrorResponse(ctx, ErrorCode.BadRequest, 'Slug already exists')
+    }
+    return createErrorResponse(ctx, ErrorCode.InternalServerError)
+  }
+}
+
+export async function deletePost (ctx: Context) {
+  const profile = await loadProfile(ctx)
+  const postState = await loadPost(ctx)
+  if (!postState) {
+    return createErrorResponse(ctx, ErrorCode.NotFound, 'Post not found')
+  }
+
+  try {
+    await postService.deletePostById(postState.post._id)
+    ctx.auditLog.info(`<Post:${postState.post.slug}> deleted by <User:${profile.uid}>`)
+    return createEnvelopedResponse(ctx, null)
+  } catch (err: any) {
+    ctx.auditLog.error('Failed to delete post', err)
+    return createErrorResponse(ctx, ErrorCode.InternalServerError)
+  }
 }
 
 export async function sendNotificationBroadcast (ctx: Context) {
@@ -639,6 +764,12 @@ function registerAdminHandlers (router: Router) {
 
   adminRouter.get('/solutions', findSolutions)
   adminRouter.get('/solutions/export', dataExportLimit, exportSolutions)
+
+  adminRouter.get('/posts', findPosts)
+  adminRouter.post('/posts', createPost)
+  adminRouter.get('/posts/:slug', getPost)
+  adminRouter.put('/posts/:slug', updatePost)
+  adminRouter.delete('/posts/:slug', rootRequire, deletePost)
 
   adminRouter.post('/notifications/broadcast', sendNotificationBroadcast)
   adminRouter.post('/notifications/users/:username', sendNotificationUser)

@@ -1,5 +1,7 @@
 import type { Paginated, PostModel } from '@putongoj/shared'
 import type { Types } from 'mongoose'
+import type { PaginateOption, SortOption } from '../types'
+import type { QueryFilter } from '../types/mongo'
 import Post from '../models/Post'
 
 type PostCreateDto = Pick<PostModel, 'title'>
@@ -9,28 +11,24 @@ type PostListPreview = Pick<PostModel, 'slug' | 'title' | 'isPublished' | 'isPin
 type PostUpdateDto = Partial<Pick<PostModel, 'title' | 'content' | 'slug' | 'isPublished' | 'isPinned' | 'isHidden'>>
 
 async function findPosts (
-  opt: { page: number, pageSize: number, showAll: boolean },
+  options: PaginateOption & SortOption,
+  filters: QueryFilter<PostModel> = {},
 ): Promise<Paginated<PostListPreview>> {
-  const { page, pageSize, showAll } = opt
-  const filter: Record<string, any> = {}
-
-  if (!showAll) {
-    filter.isPublished = true
-    filter.isHidden = false
-  }
+  const { page, pageSize, sort, sortBy } = options
 
   const docsPromise = Post
-    .find(filter)
+    .find(filters)
     .sort({
-      isPinned: -1,
-      createdAt: -1,
+      pinned: -1,
+      [sortBy]: sort,
+      ...(sortBy !== 'createdAt' ? { createdAt: -1 } : {}),
     })
     .skip((page - 1) * pageSize)
     .limit(pageSize)
     .select([ 'slug', 'title', 'isPublished', 'isPinned', 'isHidden', 'createdAt', 'updatedAt' ])
     .lean()
 
-  const totalPromise = Post.countDocuments(filter)
+  const totalPromise = Post.countDocuments(filters)
   const [ docs, total ] = await Promise.all([ docsPromise, totalPromise ])
 
   return {
