@@ -59,7 +59,6 @@
   "contests": "比赛",
   "copied": "已复制",
   "create": "创建",
-  "create_announcement": "创建公告",
   "create_contest": "创建比赛",
   "create_discussion": "创建讨论",
   "create_group": "创建群组",
@@ -269,6 +268,8 @@
   "pinned": "置顶",
   "please_apply_filter_first": "请至少应用一项筛选条件",
   "please_login_first": "请先登录",
+  "post": "文章",
+  "post_management": "文章管理",
   "private": "私密",
   "privilege": "权限",
   "problem": "题目",
@@ -281,6 +282,7 @@
   "public": "公开",
   "publish_post": "发布",
   "publish_post_desc": "允许所有用户查看此文章",
+  "publishes_at": "发布时间",
   "quota_settings": "配额设置",
   "ranklist": "排名",
   "ratio": "通过率",
@@ -401,5 +403,6 @@
   "username_already_taken": "用户名已被占用，请选择其他用户名",
   "username_invalid": "用户名无效",
   "username_invalid_detail": "用户名长度必须在 3 到 20 个字符之间，且只能包含字母、数字、下划线和连字符",
+  "view_post": "查看文章",
   "welcome_back": "欢迎回来，{username}！"
 }

@@ -83,6 +83,10 @@ const menuItems = computed(() => {
         icon: 'pi pi-plus',
         route: 'problemCreate',
       }, {
+        label: t('ptoj.post_management'),
+        icon: 'pi pi-megaphone',
+        route: 'PostManagement',
+      }, {
         label: t('ptoj.user_management'),
         icon: 'pi pi-users',
         route: 'UserManagement',

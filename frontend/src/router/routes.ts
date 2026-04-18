@@ -5,13 +5,13 @@ import Home from '@/views/Home.vue'
 import MyFiles from '@/views/MyFiles.vue'
 import MySubmissions from '@/views/MySubmissions.vue'
 import OAuthCallback from '@/views/OAuthCallback.vue'
+import PostDetail from '@/views/PostDetail.vue'
 import Ranklist from '@/views/Ranklist.vue'
 import UserProfile from '@/views/UserProfile.vue'
 import adminRoutes from './admin'
 import contestRoutes from './contest'
 import courseRoutes from './course'
 import discussionRoutes from './discussion'
-import postRoutes from './post'
 import problemRoutes from './problem'
 import solutionRoutes from './solution'
 
@@ -22,7 +22,12 @@ const routes: Array<RouteRecordRaw> = [
     component: Home,
     meta: { title: 'Home' },
   },
-  ...postRoutes,
+  {
+    path: '/posts/:slug',
+    name: 'PostDetail',
+    component: PostDetail,
+    meta: { title: 'Post' },
+  },
   ...problemRoutes,
   ...solutionRoutes,
   ...contestRoutes,

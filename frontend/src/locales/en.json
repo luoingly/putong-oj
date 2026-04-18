@@ -59,7 +59,6 @@
   "contests": "Contests",
   "copied": "Copied",
   "create": "Create",
-  "create_announcement": "Create Announcement",
   "create_contest": "Create Contest",
   "create_discussion": "Create Discussion",
   "create_group": "Create Group",
@@ -269,6 +268,8 @@
   "pinned": "Pinned",
   "please_apply_filter_first": "Please apply a filter first",
   "please_login_first": "Please login first",
+  "post": "Post",
+  "post_management": "Post Management",
   "private": "Private",
   "privilege": "Privilege",
   "problem": "Problem",
@@ -281,6 +282,7 @@
   "public": "Public",
   "publish_post": "Publish",
   "publish_post_desc": "Allow all users to view this post",
+  "publishes_at": "Publishes At",
   "quota_settings": "Quota Settings",
   "ranklist": "Ranklist",
   "ratio": "Ratio",
@@ -401,5 +403,6 @@
   "username_already_taken": "Username already taken, please choose another one",
   "username_invalid": "Invalid username",
   "username_invalid_detail": "Username must be between 3 and 20 characters and can only contain letters, numbers, underscores, and hyphens",
+  "view_post": "View Post",
   "welcome_back": "Welcome back, {username}!"
 }

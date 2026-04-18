@@ -8,6 +8,11 @@ import type {
   AdminGroupMembersUpdatePayload,
   AdminGroupUpdatePayload,
   AdminNotificationCreatePayload,
+  AdminPostCreatePayload,
+  AdminPostDetailQueryResult,
+  AdminPostListQuery,
+  AdminPostListQueryResult,
+  AdminPostUpdatePayload,
   AdminSolutionListExportQuery,
   AdminSolutionListExportQueryResult,
   AdminSolutionListQuery,
@@ -51,6 +56,22 @@ export async function findSolutions (params: AdminSolutionListQuery) {
 }
 export async function exportSolutions (params: AdminSolutionListExportQuery) {
   return instance.get<AdminSolutionListExportQueryResult>('/admin/solutions/export', { params })
+}
+
+export async function findPosts (params: AdminPostListQuery) {
+  return instance.get<AdminPostListQueryResult>('/admin/posts', { params })
+}
+export async function createPost (payload: AdminPostCreatePayload) {
+  return instance.post<{ slug: string }>('/admin/posts', payload)
+}
+export async function getPost (slug: string) {
+  return instance.get<AdminPostDetailQueryResult>(`/admin/posts/${encodeURIComponent(slug)}`)
+}
+export async function updatePost (slug: string, payload: AdminPostUpdatePayload) {
+  return instance.put<{ slug: string }>(`/admin/posts/${encodeURIComponent(slug)}`, payload)
+}
+export async function deletePost (slug: string) {
+  return instance.delete<null>(`/admin/posts/${encodeURIComponent(slug)}`)
 }
 
 export async function sendNotificationBroadcast (payload: AdminNotificationCreatePayload) {

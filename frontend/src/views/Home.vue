@@ -8,7 +8,6 @@ import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 import { findPosts } from '@/api/post'
-import PostCreateDialog from '@/components/PostCreateDialog.vue'
 import { useSessionStore } from '@/store/modules/session'
 import { timePretty } from '@/utils/format'
 import { onRouteQueryUpdate } from '@/utils/helper'
@@ -27,7 +26,6 @@ const query = ref(PostListQuerySchema.parse({}))
 const docs = ref([] as PostListQueryResult['docs'])
 const total = ref(0)
 const loading = ref(false)
-const createDialog = ref(false)
 
 async function fetch () {
   const parsed = PostListQuerySchema.safeParse(route.query)
@@ -91,7 +89,9 @@ onRouteQueryUpdate(fetch)
           </h1>
         </div>
 
-        <Button v-if="isAdmin" icon="pi pi-plus" :label="t('ptoj.create_announcement')" @click="createDialog = true" />
+        <RouterLink v-if="isAdmin" :to="{ name: 'PostManagement' }">
+          <Button icon="pi pi-cog" severity="secondary" variant="outlined" :label="t('ptoj.post_management')" />
+        </RouterLink>
       </div>
 
       <template v-if="loading || docs.length === 0">
@@ -107,19 +107,11 @@ onRouteQueryUpdate(fetch)
             <div class="flex gap-4 text-muted-color text-sm">
               <span class="flex gap-2 items-center">
                 <span class="pi pi-calendar" />
-                <span>{{ timePretty(doc.createdAt, 'yyyy-MM-dd HH:mm') }}</span>
+                <span>{{ timePretty(doc.publishesAt, 'yyyy-MM-dd HH:mm') }}</span>
               </span>
               <span v-if="doc.isPinned" class="flex gap-2 items-center text-primary">
                 <span class="pi pi-thumbtack" />
                 <span>{{ t('ptoj.pinned') }}</span>
-              </span>
-              <span v-if="doc.isHidden" class="flex gap-2 items-center text-orange-400">
-                <span class="pi pi-eye-slash" />
-                <span>{{ t('ptoj.hidden') }}</span>
-              </span>
-              <span v-if="!doc.isPublished" class="flex gap-2 items-center text-yellow-500">
-                <span class="pi pi-minus-circle" />
-                <span>{{ t('ptoj.unpublished') }}</span>
               </span>
             </div>
             <p
@@ -137,8 +129,6 @@ onRouteQueryUpdate(fetch)
         template="FirstPageLink PrevPageLink CurrentPageReport NextPageLink LastPageLink"
         :current-page-report-template="t('ptoj.paginator_report')" @page="onPage"
       />
-
-      <PostCreateDialog v-model:visible="createDialog" />
     </div>
   </div>
 </template>
