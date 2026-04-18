@@ -6,14 +6,12 @@ import Post from '../models/Post'
 
 type PostCreateDto = Pick<PostModel, 'title'>
 
-type PostListPreview = Pick<PostModel, 'slug' | 'title' | 'isPublished' | 'isPinned' | 'isHidden' | 'createdAt' | 'updatedAt'>
-
-type PostUpdateDto = Partial<Pick<PostModel, 'title' | 'content' | 'slug' | 'isPublished' | 'isPinned' | 'isHidden'>>
+type PostUpdateDto = Partial<Pick<PostModel, 'title' | 'content' | 'slug' | 'publishesAt' | 'isPublished' | 'isPinned' | 'isHidden'>>
 
 async function findPosts (
   options: PaginateOption & SortOption,
   filters: QueryFilter<PostModel> = {},
-): Promise<Paginated<PostListPreview>> {
+): Promise<Paginated<PostModel>> {
   const { page, pageSize, sort, sortBy } = options
 
   const docsPromise = Post
@@ -25,7 +23,6 @@ async function findPosts (
     })
     .skip((page - 1) * pageSize)
     .limit(pageSize)
-    .select([ 'slug', 'title', 'isPublished', 'isPinned', 'isHidden', 'createdAt', 'updatedAt' ])
     .lean()
 
   const totalPromise = Post.countDocuments(filters)
@@ -41,9 +38,11 @@ async function findPosts (
 }
 
 async function createPost (data: PostCreateDto) {
+  const now = new Date()
   const post = new Post({
     title: data.title,
     content: '',
+    publishesAt: now,
   })
   await post.save()
   return post.toObject()

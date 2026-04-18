@@ -99,6 +99,24 @@ async function migrateNewsToPost () {
   logger.info(`Migration News->Post completed, inserted=${result.upsertedCount}, matched=${result.matchedCount}`)
 }
 
+async function migratePostPublishedAt () {
+  const posts = await Post.find({ publishesAt: { $exists: false } }).lean()
+  if (posts.length === 0) {
+    logger.info('Migration Post.publishesAt skipped, no posts to migrate')
+    return
+  }
+
+  const operations = posts.map(post => ({
+    updateOne: {
+      filter: { _id: post._id },
+      update: { $set: { publishesAt: post.createdAt } },
+    },
+  }))
+
+  const result = await Post.bulkWrite(operations, { ordered: false })
+  logger.info(`Migration Post.publishesAt completed, modified=${result.modifiedCount}`)
+}
+
 const migrationTasks: MigrationTask[] = [
   {
     key: '20260320-user-storage-quota-default',
@@ -114,6 +132,11 @@ const migrationTasks: MigrationTask[] = [
     key: '20260411-news-to-post',
     description: 'Migrate legacy News collection to Post collection',
     run: migrateNewsToPost,
+  },
+  {
+    key: '20260418-post-published-at-default',
+    description: 'Backfill missing Post.publishesAt with createdAt value',
+    run: migratePostPublishedAt,
   },
 ]
 
