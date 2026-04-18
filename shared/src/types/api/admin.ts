@@ -4,6 +4,7 @@ import {
   JudgeStatus,
   Language,
   OAuthProvider,
+  TITLE_LENGTH_MAX,
   UserPrivilege,
 } from '@/consts/index.js'
 import { stringToInt } from '../codec.js'
@@ -250,7 +251,7 @@ export const AdminPostListQuerySchema = z.object({
   pageSize: PaginationSchema.shape.pageSize.default(30),
   sort: SortOptionSchema.shape.sort,
   sortBy: z.enum(['publishesAt', 'createdAt', 'updatedAt']).default('publishesAt'),
-  title: z.string().max(100).optional(),
+  title: z.string().max(TITLE_LENGTH_MAX).optional(),
   isPublished: z.stringbool().optional(),
   isPinned: z.stringbool().optional(),
   isHidden: z.stringbool().optional(),

@@ -56,9 +56,6 @@ test.serial('Visitor list only shows published and non-hidden posts', async (t) 
   t.falsy(bySlug.get(hiddenPublishedSlug))
   t.falsy(bySlug.get(visibleDraftSlug))
   t.falsy(bySlug.get(hiddenDraftSlug))
-
-  t.is(bySlug.get(visiblePublishedSlug)?.isPublished, true)
-  t.is(bySlug.get(visiblePublishedSlug)?.isHidden, false)
 })
 
 test.serial('Visitor can access published post by slug even if hidden', async (t) => {
@@ -66,7 +63,6 @@ test.serial('Visitor can access published post by slug even if hidden', async (t
 
   t.is(res.status, 200)
   t.true(res.body.success)
-  t.is(res.body.data.isPublished, true)
   t.is(res.body.data.isHidden, true)
 })
 

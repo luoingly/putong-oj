@@ -11,7 +11,7 @@ type PostUpdateDto = Partial<Pick<PostModel, 'title' | 'content' | 'slug' | 'pub
 async function findPosts (
   options: PaginateOption & SortOption,
   filters: QueryFilter<PostModel> = {},
-): Promise<Paginated<PostModel>> {
+): Promise<Paginated<Omit<PostModel, 'content'>>> {
   const { page, pageSize, sort, sortBy } = options
 
   const docsPromise = Post
@@ -23,6 +23,7 @@ async function findPosts (
     })
     .skip((page - 1) * pageSize)
     .limit(pageSize)
+    .select({ content: 0 })
     .lean()
 
   const totalPromise = Post.countDocuments(filters)
