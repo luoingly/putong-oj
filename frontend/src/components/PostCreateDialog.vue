@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { PostCreatePayload } from '@putongoj/shared'
+import type { AdminPostCreatePayload } from '@putongoj/shared'
 import Button from 'primevue/button'
 import Dialog from 'primevue/dialog'
 import IftaLabel from 'primevue/iftalabel'
@@ -7,7 +7,7 @@ import InputText from 'primevue/inputtext'
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
-import { createPost } from '@/api/post'
+import { createPost } from '@/api/admin'
 import { useMessage } from '@/utils/message'
 
 const visible = defineModel<boolean>('visible')
@@ -17,7 +17,7 @@ const router = useRouter()
 const message = useMessage()
 
 const submitting = ref(false)
-const form = ref<PostCreatePayload>({
+const form = ref<AdminPostCreatePayload>({
   title: '',
 })
 
@@ -39,8 +39,10 @@ async function submit () {
 
   visible.value = false
   form.value.title = ''
-  message.success(t('ptoj.successful_create_post_detail', { slug: resp.data.slug }))
-  router.push({ name: 'PostEdit', params: { slug: resp.data.slug } })
+
+  const { slug } = resp.data
+  message.success(t('ptoj.successful_create_post_detail', { slug }))
+  router.push({ name: 'PostManagementDetail', params: { slug } })
 }
 </script>
 

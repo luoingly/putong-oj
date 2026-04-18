@@ -1,6 +1,8 @@
 import type { RouteRecordRaw } from 'vue-router'
 
 const GroupManagement = () => import('@/views/Admin/GroupManagement.vue')
+const PostManagement = () => import('@/views/Admin/PostManagement.vue')
+const PostManagementDetail = () => import('@/views/Admin/PostManagementDetail.vue')
 const TagManager = () => import('@/views/Admin/TagManager.vue')
 const UserManagement = () => import('@/views/Admin/UserManagement.vue')
 const UserManagementDetail = () => import('@/views/Admin/UserManagementDetail.vue')
@@ -38,6 +40,18 @@ const adminRoutes: Array<RouteRecordRaw> = [
     name: 'SolutionManagement',
     component: SolutionManagement,
     meta: { title: 'Solution Management', requiresAdmin: true },
+  },
+  {
+    path: '/admin/posts',
+    name: 'PostManagement',
+    component: PostManagement,
+    meta: { title: 'Post Management', requiresAdmin: true },
+  },
+  {
+    path: '/admin/posts/:slug',
+    name: 'PostManagementDetail',
+    component: PostManagementDetail,
+    meta: { title: 'Post Edit', requiresAdmin: true },
   },
   {
     path: '/admin/notifications/create',

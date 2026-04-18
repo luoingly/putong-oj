@@ -249,7 +249,7 @@ export const AdminPostListQuerySchema = z.object({
   page: PaginationSchema.shape.page,
   pageSize: PaginationSchema.shape.pageSize.default(30),
   sort: SortOptionSchema.shape.sort,
-  sortBy: z.enum(['createdAt', 'updatedAt']).default('createdAt'),
+  sortBy: z.enum(['publishesAt', 'createdAt', 'updatedAt']).default('publishesAt'),
   title: z.string().max(100).optional(),
   isPublished: z.stringbool().optional(),
   isPinned: z.stringbool().optional(),

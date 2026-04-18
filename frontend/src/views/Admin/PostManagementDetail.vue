@@ -1,14 +1,15 @@
 <script setup lang="ts">
-import type { PostDetailQueryResult, PostUpdatePayload } from '@putongoj/shared'
+import type { AdminPostDetailQueryResult, AdminPostUpdatePayload } from '@putongoj/shared'
 import { storeToRefs } from 'pinia'
 import Button from 'primevue/button'
+import DatePicker from 'primevue/datepicker'
 import IftaLabel from 'primevue/iftalabel'
 import InputText from 'primevue/inputtext'
 import { useConfirm } from 'primevue/useconfirm'
 import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
-import { deletePost, getPost, updatePost } from '@/api/post'
+import { deletePost, getPost, updatePost } from '@/api/admin'
 import LabeledSwitch from '@/components/LabeledSwitch.vue'
 import MarkdownEditor from '@/components/MarkdownEditor.vue'
 import { useSessionStore } from '@/store/modules/session'
@@ -19,14 +20,15 @@ const route = useRoute()
 const router = useRouter()
 const confirm = useConfirm()
 const message = useMessage()
-const post = ref<PostDetailQueryResult | null>(null)
-const editingPost = ref<Required<PostUpdatePayload>>({
+const post = ref<AdminPostDetailQueryResult | null>(null)
+const editingPost = ref<Required<Omit<AdminPostUpdatePayload, 'publishesAt'>> & { publishesAt: Date }>({
   title: '',
   slug: '',
   content: '',
   isPinned: false,
   isHidden: false,
   isPublished: false,
+  publishesAt: new Date(),
 })
 const { isRoot } = storeToRefs(useSessionStore())
 const loading = ref(false)
@@ -43,6 +45,7 @@ const hasChanges = computed(() => {
     || editingPost.value.isPinned !== post.value.isPinned
     || editingPost.value.isHidden !== post.value.isHidden
     || editingPost.value.isPublished !== post.value.isPublished
+    || editingPost.value.publishesAt.getTime() !== new Date(post.value.publishesAt).getTime()
 })
 
 function setEditingPost () {
@@ -56,6 +59,7 @@ function setEditingPost () {
     isPinned: post.value.isPinned,
     isHidden: post.value.isHidden,
     isPublished: post.value.isPublished,
+    publishesAt: new Date(post.value.publishesAt),
   }
 }
 
@@ -66,7 +70,7 @@ async function fetchPost () {
 
   if (!resp.success || !resp.data) {
     message.error(resp.message)
-    router.replace({ name: 'home' })
+    router.replace({ name: 'PostManagement' })
     return
   }
   post.value = resp.data
@@ -82,7 +86,7 @@ async function submit () {
     return
   }
 
-  const payload: PostUpdatePayload = {}
+  const payload: AdminPostUpdatePayload = {}
   if (editingPost.value.title !== post.value.title) {
     payload.title = editingPost.value.title
   }
@@ -100,6 +104,9 @@ async function submit () {
   }
   if (editingPost.value.isPublished !== post.value.isPublished) {
     payload.isPublished = editingPost.value.isPublished
+  }
+  if (editingPost.value.publishesAt.getTime() !== new Date(post.value.publishesAt).getTime()) {
+    payload.publishesAt = editingPost.value.publishesAt
   }
 
   if (Object.keys(payload).length === 0) {
@@ -153,7 +160,7 @@ function del (event: Event) {
         return
       }
       message.success(t('ptoj.successful_delete_post_detail', { slug }))
-      router.push({ name: 'home' })
+      router.push({ name: 'PostManagement' })
     },
   })
 }
@@ -161,11 +168,17 @@ function del (event: Event) {
 
 <template>
   <div class="max-w-6xl p-0">
-    <div class="flex font-semibold gap-4 items-center pt-6 px-6">
-      <i class="p-[4.5px] pi pi-file-edit text-2xl" />
-      <h1 class="text-xl">
-        {{ t('ptoj.edit_post') }}
-      </h1>
+    <div class="flex items-center justify-between pt-6 px-6">
+      <div class="flex font-semibold gap-4 items-center">
+        <i class="p-[4.5px] pi pi-file-edit text-2xl" />
+        <h1 class="text-xl">
+          {{ t('ptoj.edit_post') }}
+        </h1>
+      </div>
+
+      <RouterLink v-if="post" :to="{ name: 'PostDetail', params: { slug: post.slug } }">
+        <Button outlined :label="t('ptoj.view_post')" icon="pi pi-eye" />
+      </RouterLink>
     </div>
 
     <template v-if="loading || !post">
@@ -177,20 +190,26 @@ function del (event: Event) {
 
     <template v-else>
       <div class="gap-x-4 gap-y-6 grid grid-cols-1 lg:grid-cols-3 md:grid-cols-2 p-6 pt-5">
-        <IftaLabel class="md:col-span-2">
+        <IftaLabel class="lg:col-span-3 md:col-span-2">
           <InputText id="post-title" v-model="editingPost.title" type="text" fluid :placeholder="t('ptoj.title')" />
           <label for="post-title">{{ t('ptoj.title') }}</label>
         </IftaLabel>
 
-        <IftaLabel>
+        <IftaLabel class="md:col-span-2">
           <InputText id="post-slug" v-model="editingPost.slug" type="text" fluid :placeholder="t('ptoj.slug')" />
           <label for="post-slug">{{ t('ptoj.slug') }}</label>
         </IftaLabel>
 
-        <LabeledSwitch
-          v-model="editingPost.isPinned" :label="t('ptoj.pin')"
-          :description="t('ptoj.pin_post_desc')"
-        />
+        <IftaLabel>
+          <DatePicker
+            id="post-publishes-at" v-model="editingPost.publishesAt" show-time show-seconds
+            date-format="yy-mm-dd" time-format="HH:mm:ss" :step-second="15" fluid
+            :placeholder="t('ptoj.publishes_at')"
+          />
+          <label for="post-publishes-at">{{ t('ptoj.publishes_at') }}</label>
+        </IftaLabel>
+
+        <LabeledSwitch v-model="editingPost.isPinned" :label="t('ptoj.pin')" :description="t('ptoj.pin_post_desc')" />
 
         <LabeledSwitch
           v-model="editingPost.isHidden" :label="t('ptoj.hide_post')"
