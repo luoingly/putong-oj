@@ -27,6 +27,10 @@ const postSchema = new mongoose.Schema({
       message: 'Content must be a string',
     },
   },
+  publishesAt: {
+    type: Date,
+    required: true,
+  },
   isPublished: {
     type: Boolean,
     default: false,

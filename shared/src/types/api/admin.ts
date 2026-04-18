@@ -261,6 +261,7 @@ export type AdminPostListQuery = z.infer<typeof AdminPostListQuerySchema>
 export const AdminPostListQueryResultSchema = PaginatedSchema(z.object({
   slug: PostModelSchema.shape.slug,
   title: PostModelSchema.shape.title,
+  publishesAt: PostModelSchema.shape.publishesAt,
   isPublished: PostModelSchema.shape.isPublished,
   isPinned: PostModelSchema.shape.isPinned,
   isHidden: PostModelSchema.shape.isHidden,
@@ -274,6 +275,7 @@ export const AdminPostDetailQueryResultSchema = z.object({
   slug: PostModelSchema.shape.slug,
   title: PostModelSchema.shape.title,
   content: PostModelSchema.shape.content,
+  publishesAt: PostModelSchema.shape.publishesAt,
   isPublished: PostModelSchema.shape.isPublished,
   isPinned: PostModelSchema.shape.isPinned,
   isHidden: PostModelSchema.shape.isHidden,
@@ -290,9 +292,10 @@ export const AdminPostCreatePayloadSchema = z.object({
 export type AdminPostCreatePayload = z.infer<typeof AdminPostCreatePayloadSchema>
 
 export const AdminPostUpdatePayloadSchema = z.object({
+  slug: PostModelSchema.shape.slug.optional(),
   title: PostModelSchema.shape.title.optional(),
   content: PostModelSchema.shape.content.optional(),
-  slug: PostModelSchema.shape.slug.optional(),
+  publishesAt: PostModelSchema.shape.publishesAt.optional(),
   isPublished: PostModelSchema.shape.isPublished.optional(),
   isPinned: PostModelSchema.shape.isPinned.optional(),
   isHidden: PostModelSchema.shape.isHidden.optional(),
