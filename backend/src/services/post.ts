@@ -17,7 +17,7 @@ async function findPosts (
   const docsPromise = Post
     .find(filters)
     .sort({
-      pinned: -1,
+      isPinned: -1,
       [sortBy]: sort,
       ...(sortBy !== 'createdAt' ? { createdAt: -1 } : {}),
     })
