@@ -30,7 +30,7 @@ test.serial('Admin can create a post with default flags', async (t) => {
   t.truthy(res.body.data.slug)
 
   const slug = res.body.data.slug as string
-  const find = await request.get(`/api/posts/${slug}`)
+  const find = await request.get(`/api/admin/posts/${slug}`)
 
   t.is(find.status, 200)
   t.true(find.body.success)
@@ -63,7 +63,7 @@ test.serial('Admin can update isPublished, isPinned, and isHidden', async (t) =>
   t.is(update.status, 200)
   t.true(update.body.success)
 
-  const find = await request.get(`/api/posts/${slug}`)
+  const find = await request.get(`/api/admin/posts/${slug}`)
   t.is(find.status, 200)
   t.true(find.body.success)
   t.is(find.body.data.title, 'Admin Update Flags Updated')
@@ -151,7 +151,7 @@ test.serial('Admin root can delete a post', async (t) => {
   t.is(del.status, 200)
   t.true(del.body.success)
 
-  const find = await request.get(`/api/posts/${slug}`)
+  const find = await request.get(`/api/admin/posts/${slug}`)
   t.is(find.status, 200)
   t.false(find.body.success)
   t.is(find.body.code, 404)
