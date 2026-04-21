@@ -1,5 +1,5 @@
 import type { PostModel } from '@putongoj/shared'
-import type { Context } from 'koa'
+import type { AppContext } from '../types/koa'
 import type { WithId } from '../types'
 import Post from '../models/Post'
 
@@ -7,19 +7,19 @@ export interface PostState {
   post: WithId<PostModel>
 }
 
-function buildPostState (ctx: Context, post: WithId<PostModel>) {
+function buildPostState (c: AppContext, post: WithId<PostModel>) {
   const state: PostState = { post }
-  ctx.state.post = state
+  c.set('post', state)
   return state
 }
 
-export async function loadPost (ctx: Context, inputSlug?: string) {
-  const slug = String(inputSlug ?? ctx.params.slug)
+export async function loadPost (c: AppContext, inputSlug?: string) {
+  const slug = String(inputSlug ?? c.req.param('slug'))
   if (slug.length === 0) {
     return null
   }
-  if (ctx.state.post?.post.slug === slug) {
-    return ctx.state.post
+  if (c.get('post')?.post.slug === slug) {
+    return c.get('post')!
   }
 
   const post = await Post.findOne({ slug }).lean()
@@ -27,10 +27,10 @@ export async function loadPost (ctx: Context, inputSlug?: string) {
     return null
   }
 
-  const isAdmin = ctx.state.profile?.isAdmin ?? false
+  const isAdmin = c.get('profile')?.isAdmin ?? false
   if (!post.isPublished && !isAdmin) {
     return null
   }
 
-  return buildPostState(ctx, post)
+  return buildPostState(c, post)
 }

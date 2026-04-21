@@ -1,7 +1,7 @@
-import type { Context } from 'koa'
+import type { AppContext, HonoEnv } from '../types/koa'
 import { Buffer } from 'node:buffer'
 import { timingSafeEqual } from 'node:crypto'
-import Router from '@koa/router'
+import { Hono } from 'hono'
 import {
   AccountChangePasswordPayloadSchema,
   AccountEditPayloadSchema,
@@ -31,76 +31,80 @@ import {
   passwordHashBuffer,
 } from '../utils'
 
-export async function getProfile (ctx: Context) {
-  const profile = await checkSession(ctx)
+export async function getProfile (c: AppContext) {
+  const profile = await checkSession(c)
   if (!profile) {
-    return createErrorResponse(ctx, ErrorCode.Unauthorized, 'Not logged in')
+    return createErrorResponse(c, ErrorCode.Unauthorized, 'Not logged in')
   }
 
   const result = AccountProfileQueryResultSchema.encode(profile.toObject())
-  return createEnvelopedResponse(ctx, result)
+  return createEnvelopedResponse(c, result)
 }
 
-export async function userLogin (ctx: Context) {
-  const payload = AccountLoginPayloadSchema.safeParse(ctx.request.body)
+export async function userLogin (c: AppContext) {
+  const body = await c.req.json().catch(() => ({}))
+  const payload = AccountLoginPayloadSchema.safeParse(body)
   if (!payload.success) {
-    return createZodErrorResponse(ctx, payload.error)
+    return createZodErrorResponse(c, payload.error)
   }
   let password: string
   try {
     password = await cryptoService.decryptData(payload.data.password)
   } catch {
-    return createErrorResponse(ctx, ErrorCode.BadRequest, 'Failed to decrypt password field')
+    return createErrorResponse(c, ErrorCode.BadRequest, 'Failed to decrypt password field')
   }
   const pwdHash = passwordHashBuffer(password)
 
   const user = await userService.getUser(payload.data.username)
   if (!user) {
-    return createErrorResponse(ctx, ErrorCode.Unauthorized, 'Username or password is incorrect')
+    return createErrorResponse(c, ErrorCode.Unauthorized, 'Username or password is incorrect')
   }
   if (timingSafeEqual(Buffer.from(user.pwd, 'hex'), pwdHash) === false) {
-    return createErrorResponse(ctx, ErrorCode.Unauthorized, 'Username or password is incorrect')
+    return createErrorResponse(c, ErrorCode.Unauthorized, 'Username or password is incorrect')
   }
   if (user.privilege === UserPrivilege.Banned) {
-    return createErrorResponse(ctx, ErrorCode.Forbidden, 'Account has been banned, please contact the administrator')
+    return createErrorResponse(c, ErrorCode.Forbidden, 'Account has been banned, please contact the administrator')
   }
 
   const userId = user._id.toString()
   const sessionId = await sessionService.createSession(
-    userId, ctx.state.clientIp, ctx.get('User-Agent') || '',
+    userId, c.get('clientIp'), c.req.header('User-Agent') || '',
   )
-  ctx.session.userId = userId
-  ctx.session.sessionId = sessionId
+  const session = c.get('session')
+  session.userId = userId
+  session.sessionId = sessionId
+  session._modified = true
 
-  ctx.auditLog.info(`<User:${user.uid}> logged in successfully`)
+  c.get('auditLog').info(`<User:${user.uid}> logged in successfully`)
 
   const result = AccountProfileQueryResultSchema.encode(user.toObject())
-  return createEnvelopedResponse(ctx, result)
+  return createEnvelopedResponse(c, result)
 }
 
-export async function userRegister (ctx: Context) {
-  const profile = await checkSession(ctx)
+export async function userRegister (c: AppContext) {
+  const profile = await checkSession(c)
   if (profile) {
-    return createErrorResponse(ctx, ErrorCode.BadRequest, 'Already logged in')
+    return createErrorResponse(c, ErrorCode.BadRequest, 'Already logged in')
   }
 
-  const payload = AccountRegisterPayloadSchema.safeParse(ctx.request.body)
+  const body = await c.req.json().catch(() => ({}))
+  const payload = AccountRegisterPayloadSchema.safeParse(body)
   if (!payload.success) {
-    return createZodErrorResponse(ctx, payload.error)
+    return createZodErrorResponse(c, payload.error)
   }
   let password: string
   try {
     password = await cryptoService.decryptData(payload.data.password)
   } catch {
-    return createErrorResponse(ctx, ErrorCode.BadRequest, 'Failed to decrypt password field')
+    return createErrorResponse(c, ErrorCode.BadRequest, 'Failed to decrypt password field')
   }
 
   const available = await userService.checkUserAvailable(payload.data.username)
   if (!available) {
-    return createErrorResponse(ctx, ErrorCode.Conflict, 'The username has been registered or reserved')
+    return createErrorResponse(c, ErrorCode.Conflict, 'The username has been registered or reserved')
   }
   if (!isComplexPwd(password)) {
-    return createErrorResponse(ctx, ErrorCode.BadRequest, 'Password is not complex enough')
+    return createErrorResponse(c, ErrorCode.BadRequest, 'Password is not complex enough')
   }
 
   try {
@@ -110,39 +114,45 @@ export async function userRegister (ctx: Context) {
     })
     const userId = user._id.toString()
     const sessionId = await sessionService.createSession(
-      userId, ctx.state.clientIp, ctx.get('User-Agent') || '',
+      userId, c.get('clientIp'), c.req.header('User-Agent') || '',
     )
-    ctx.session.userId = userId
-    ctx.session.sessionId = sessionId
+    const session = c.get('session')
+    session.userId = userId
+    session.sessionId = sessionId
+    session._modified = true
 
-    ctx.auditLog.info(`<User:${user.uid}> registered successfully`)
+    c.get('auditLog').info(`<User:${user.uid}> registered successfully`)
 
     const result = AccountProfileQueryResultSchema.encode(user.toObject())
-    return createEnvelopedResponse(ctx, result)
+    return createEnvelopedResponse(c, result)
   } catch (err) {
-    ctx.auditLog.error('Failed to register user', err)
-    return createErrorResponse(ctx, ErrorCode.InternalServerError)
+    c.get('auditLog').error('Failed to register user', err)
+    return createErrorResponse(c, ErrorCode.InternalServerError)
   }
 }
 
-export async function userLogout (ctx: Context) {
-  const { profile, sessionId } = ctx.state
+export async function userLogout (c: AppContext) {
+  const profile = c.get('profile')
+  const sessionId = c.get('sessionId')
 
   if (profile && sessionId) {
     await sessionService.revokeSession(profile._id.toString(), sessionId)
-    ctx.auditLog.info(`<User:${profile.uid}> logged out`)
+    c.get('auditLog').info(`<User:${profile.uid}> logged out`)
   }
-  delete ctx.session.userId
-  delete ctx.session.sessionId
+  const session = c.get('session')
+  delete session.userId
+  delete session.sessionId
+  session._modified = true
 
-  return createEnvelopedResponse(ctx, null)
+  return createEnvelopedResponse(c, null)
 }
 
-export async function updateProfile (ctx: Context) {
-  const profile = await loadProfile(ctx)
-  const payload = AccountEditPayloadSchema.safeParse(ctx.request.body)
+export async function updateProfile (c: AppContext) {
+  const profile = await loadProfile(c)
+  const body = await c.req.json().catch(() => ({}))
+  const payload = AccountEditPayloadSchema.safeParse(body)
   if (!payload.success) {
-    return createZodErrorResponse(ctx, payload.error)
+    return createZodErrorResponse(c, payload.error)
   }
 
   try {
@@ -153,7 +163,7 @@ export async function updateProfile (ctx: Context) {
       if (avatar !== profile.avatar) {
         const presets = await settingsService.getAvatarPresets()
         if (!presets.includes(avatar)) {
-          return createErrorResponse(ctx, ErrorCode.Forbidden, 'Avatar is not in the allowed presets')
+          return createErrorResponse(c, ErrorCode.Forbidden, 'Avatar is not in the allowed presets')
         }
       }
     }
@@ -162,19 +172,20 @@ export async function updateProfile (ctx: Context) {
       nick, avatar, motto, mail, school,
     })
     const result = AccountProfileQueryResultSchema.encode(updatedUser.toObject())
-    ctx.auditLog.info(`<User:${profile.uid}> updated profile`)
-    return createEnvelopedResponse(ctx, result)
+    c.get('auditLog').info(`<User:${profile.uid}> updated profile`)
+    return createEnvelopedResponse(c, result)
   } catch (err) {
-    ctx.auditLog.error('Failed to update profile', err)
-    return createErrorResponse(ctx, ErrorCode.InternalServerError)
+    c.get('auditLog').error('Failed to update profile', err)
+    return createErrorResponse(c, ErrorCode.InternalServerError)
   }
 }
 
-export async function updatePassword (ctx: Context) {
-  const profile = await loadProfile(ctx)
-  const payload = AccountChangePasswordPayloadSchema.safeParse(ctx.request.body)
+export async function updatePassword (c: AppContext) {
+  const profile = await loadProfile(c)
+  const body = await c.req.json().catch(() => ({}))
+  const payload = AccountChangePasswordPayloadSchema.safeParse(body)
   if (!payload.success) {
-    return createZodErrorResponse(ctx, payload.error)
+    return createZodErrorResponse(c, payload.error)
   }
   let oldPassword: string | undefined
   let newPassword: string | undefined
@@ -182,49 +193,49 @@ export async function updatePassword (ctx: Context) {
     oldPassword = await cryptoService.decryptData(payload.data.oldPassword)
     newPassword = await cryptoService.decryptData(payload.data.newPassword)
   } catch {
-    return createErrorResponse(ctx, ErrorCode.BadRequest, 'Failed to decrypt password field')
+    return createErrorResponse(c, ErrorCode.BadRequest, 'Failed to decrypt password field')
   }
 
   if (!isComplexPwd(newPassword)) {
-    return createErrorResponse(ctx, ErrorCode.BadRequest, 'New password is not complex enough')
+    return createErrorResponse(c, ErrorCode.BadRequest, 'New password is not complex enough')
   }
   const oldPwdHash = passwordHashBuffer(oldPassword)
   if (timingSafeEqual(Buffer.from(profile.pwd, 'hex'), oldPwdHash) === false) {
-    return createErrorResponse(ctx, ErrorCode.Unauthorized, 'Old password is incorrect')
+    return createErrorResponse(c, ErrorCode.Unauthorized, 'Old password is incorrect')
   }
   const pwd = passwordHash(newPassword)
 
   try {
     await userService.updateUser(profile, { pwd })
     const userId = profile._id.toString()
-    const revoked = await sessionService.revokeOtherSessions(userId, ctx.state.sessionId!)
-    ctx.auditLog.info(`<User:${profile.uid}> changed password, revoked ${revoked} other session(s)`)
-    return createEnvelopedResponse(ctx, null)
+    const revoked = await sessionService.revokeOtherSessions(userId, c.get('sessionId')!)
+    c.get('auditLog').info(`<User:${profile.uid}> changed password, revoked ${revoked} other session(s)`)
+    return createEnvelopedResponse(c, null)
   } catch (err) {
-    ctx.auditLog.error('Failed to update password', err)
-    return createErrorResponse(ctx, ErrorCode.InternalServerError)
+    c.get('auditLog').error('Failed to update password', err)
+    return createErrorResponse(c, ErrorCode.InternalServerError)
   }
 }
 
-export async function findSubmissions (ctx: Context) {
-  const profile = await loadProfile(ctx)
-  const query = AccountSubmissionListQuerySchema.safeParse(ctx.request.query)
+export async function findSubmissions (c: AppContext) {
+  const profile = await loadProfile(c)
+  const query = AccountSubmissionListQuerySchema.safeParse(c.req.query())
   if (!query.success) {
-    return createZodErrorResponse(ctx, query.error)
+    return createZodErrorResponse(c, query.error)
   }
 
   const solutions = await solutionService
     .findSolutions({ ...query.data, user: profile.uid })
   const result = AccountSubmissionListQueryResultSchema.encode(solutions)
-  return createEnvelopedResponse(ctx, result)
+  return createEnvelopedResponse(c, result)
 }
 
-export async function listSessions (ctx: Context) {
-  const profile = await loadProfile(ctx)
+export async function listSessions (c: AppContext) {
+  const profile = await loadProfile(c)
   const userId = profile._id.toString()
   const sessions = await sessionService.listSessions(userId)
 
-  const currentSessionId = ctx.state.sessionId
+  const currentSessionId = c.get('sessionId')
   const result = SessionListQueryResultSchema.parse(sessions.map(s => ({
     sessionId: s.sessionId,
     current: s.sessionId === currentSessionId,
@@ -233,55 +244,55 @@ export async function listSessions (ctx: Context) {
     loginIp: s.info.loginIp,
     userAgent: s.info.userAgent,
   })))
-  return createEnvelopedResponse(ctx, result)
+  return createEnvelopedResponse(c, result)
 }
 
-export async function revokeSession (ctx: Context) {
-  const profile = await loadProfile(ctx)
-  const { sessionId } = ctx.params
+export async function revokeSession (c: AppContext) {
+  const profile = await loadProfile(c)
+  const sessionId = c.req.param('sessionId')
   if (!sessionId || typeof sessionId !== 'string') {
-    return createErrorResponse(ctx, ErrorCode.BadRequest, 'Invalid session ID')
+    return createErrorResponse(c, ErrorCode.BadRequest, 'Invalid session ID')
   }
-  if (sessionId === ctx.state.sessionId) {
-    return createErrorResponse(ctx, ErrorCode.BadRequest, 'Cannot revoke current session, use logout instead')
+  if (sessionId === c.get('sessionId')) {
+    return createErrorResponse(c, ErrorCode.BadRequest, 'Cannot revoke current session, use logout instead')
   }
 
   await sessionService.revokeSession(profile._id.toString(), sessionId)
-  ctx.auditLog.info(`<User:${profile.uid}> revoked <Session:${sessionId}>`)
-  return createEnvelopedResponse(ctx, null)
+  c.get('auditLog').info(`<User:${profile.uid}> revoked <Session:${sessionId}>`)
+  return createEnvelopedResponse(c, null)
 }
 
-export async function revokeOtherSessions (ctx: Context) {
-  const profile = await loadProfile(ctx)
-  const currentSessionId = ctx.state.sessionId
+export async function revokeOtherSessions (c: AppContext) {
+  const profile = await loadProfile(c)
+  const currentSessionId = c.get('sessionId')
   if (!currentSessionId) {
-    return createErrorResponse(ctx, ErrorCode.BadRequest, 'No active session')
+    return createErrorResponse(c, ErrorCode.BadRequest, 'No active session')
   }
 
   const removed = await sessionService.revokeOtherSessions(
     profile._id.toString(), currentSessionId,
   )
-  ctx.auditLog.info(`<User:${profile.uid}> revoked ${removed} other session(s)`)
+  c.get('auditLog').info(`<User:${profile.uid}> revoked ${removed} other session(s)`)
   const result = SessionRevokeOthersResultSchema.parse({ removed })
-  return createEnvelopedResponse(ctx, result)
+  return createEnvelopedResponse(c, result)
 }
 
-function registerAccountHandlers (router: Router) {
-  const accountRouter = new Router({ prefix: '/account' })
+function registerAccountHandlers (app: Hono<HonoEnv>) {
+  const accountApp = new Hono<HonoEnv>()
 
-  accountRouter.get('/profile', getProfile)
-  accountRouter.post('/login', userLoginLimit, userLogin)
-  accountRouter.post('/register', userRegisterLimit, userRegister)
-  accountRouter.post('/logout', loginRequire, userLogout)
-  accountRouter.put('/profile', loginRequire, updateProfile)
-  accountRouter.put('/password', loginRequire, updatePassword)
-  accountRouter.get('/submissions', loginRequire, findSubmissions)
+  accountApp.get('/profile', getProfile)
+  accountApp.post('/login', userLoginLimit, userLogin)
+  accountApp.post('/register', userRegisterLimit, userRegister)
+  accountApp.post('/logout', loginRequire, userLogout)
+  accountApp.put('/profile', loginRequire, updateProfile)
+  accountApp.put('/password', loginRequire, updatePassword)
+  accountApp.get('/submissions', loginRequire, findSubmissions)
 
-  accountRouter.get('/sessions', loginRequire, listSessions)
-  accountRouter.delete('/sessions', loginRequire, revokeOtherSessions)
-  accountRouter.delete('/sessions/:sessionId', loginRequire, revokeSession)
+  accountApp.get('/sessions', loginRequire, listSessions)
+  accountApp.delete('/sessions', loginRequire, revokeOtherSessions)
+  accountApp.delete('/sessions/:sessionId', loginRequire, revokeSession)
 
-  router.use(accountRouter.routes(), accountRouter.allowedMethods())
+  app.route('/account', accountApp)
 }
 
 export default registerAccountHandlers

@@ -1,8 +1,8 @@
 import type { OAuthConnection } from '@putongoj/shared'
-import type { Context } from 'koa'
+import type { AppContext, HonoEnv } from '../types/koa'
 import type { UserDocument } from '../models/User'
 import type { OAuthState } from '../services/oauth'
-import Router from '@koa/router'
+import { Hono } from 'hono'
 import {
   ErrorCode,
   OAuthAction,
@@ -28,33 +28,33 @@ const loginEnabledProviders: OAuthProvider[] = [
   OAuthProvider.CJLU,
 ] as const
 
-export async function generateOAuthUrl (ctx: Context) {
-  const provider = OAuthProviderSchema.safeParse(ctx.params.provider)
+export async function generateOAuthUrl (c: AppContext) {
+  const provider = OAuthProviderSchema.safeParse(c.req.param('provider'))
   if (!provider.success) {
-    return createZodErrorResponse(ctx, provider.error)
+    return createZodErrorResponse(c, provider.error)
   }
-  const query = OAuthGenerateUrlQuerySchema.safeParse(ctx.request.query)
+  const query = OAuthGenerateUrlQuerySchema.safeParse(c.req.query())
   if (!query.success) {
-    return createZodErrorResponse(ctx, query.error)
+    return createZodErrorResponse(c, query.error)
   }
 
   try {
     const url = await oauthService.generateOAuthUrl(provider.data, query.data.action)
     const response = OAuthGenerateUrlQueryResultSchema.encode({ url })
-    return createEnvelopedResponse(ctx, response)
+    return createEnvelopedResponse(c, response)
   } catch (error: any) {
-    return createErrorResponse(ctx, ErrorCode.BadRequest, error.message)
+    return createErrorResponse(c, ErrorCode.BadRequest, error.message)
   }
 }
 
-export async function handleOAuthCallback (ctx: Context) {
-  const provider = OAuthProviderSchema.safeParse(ctx.params.provider)
+export async function handleOAuthCallback (c: AppContext) {
+  const provider = OAuthProviderSchema.safeParse(c.req.param('provider'))
   if (!provider.success) {
-    return createZodErrorResponse(ctx, provider.error)
+    return createZodErrorResponse(c, provider.error)
   }
-  const query = OAuthCallbackQuerySchema.safeParse(ctx.request.query)
+  const query = OAuthCallbackQuerySchema.safeParse(c.req.query())
   if (!query.success) {
-    return createZodErrorResponse(ctx, query.error)
+    return createZodErrorResponse(c, query.error)
   }
 
   let stateData: OAuthState | null = null
@@ -65,40 +65,42 @@ export async function handleOAuthCallback (ctx: Context) {
     stateData = result.stateData
     connection = result.connection
   } catch (error: any) {
-    return createErrorResponse(ctx, ErrorCode.BadRequest, error.message)
+    return createErrorResponse(c, ErrorCode.BadRequest, error.message)
   }
 
   let user: UserDocument | null = null
   if (stateData.action === OAuthAction.CONNECT) {
-    const profile = await loadProfile(ctx)
+    const profile = await loadProfile(c)
     const isConnected = await oauthService
       .isOAuthConnectedToAnotherUser(profile._id, connection)
     if (isConnected) {
-      return createErrorResponse(ctx, ErrorCode.BadRequest, 'This 3rd-party account has been connected to another user')
+      return createErrorResponse(c, ErrorCode.BadRequest, 'This 3rd-party account has been connected to another user')
     }
     user = profile
   } else if (stateData.action === OAuthAction.LOGIN) {
-    const { provider, providerId } = connection
-    if (!loginEnabledProviders.includes(provider)) {
-      return createErrorResponse(ctx, ErrorCode.BadRequest, `Login via ${provider} OAuth is not enabled`)
+    const { provider: prov, providerId } = connection
+    if (!loginEnabledProviders.includes(prov)) {
+      return createErrorResponse(c, ErrorCode.BadRequest, `Login via ${prov} OAuth is not enabled`)
     }
     const connectedUser = await oauthService
-      .findUserByOAuthConnection(provider, providerId)
+      .findUserByOAuthConnection(prov, providerId)
     if (!connectedUser) {
-      return createErrorResponse(ctx, ErrorCode.BadRequest, 'No user is connected with this 3rd-party account, please login first and bind it')
+      return createErrorResponse(c, ErrorCode.BadRequest, 'No user is connected with this 3rd-party account, please login first and bind it')
     }
     user = connectedUser
 
     const userId = user._id.toString()
     const sessionId = await sessionService.createSession(
-      userId, ctx.state.clientIp, ctx.get('User-Agent') || '',
+      userId, c.get('clientIp'), c.req.header('User-Agent') || '',
     )
-    ctx.session.userId = userId
-    ctx.session.sessionId = sessionId
+    const session = c.get('session')
+    session.userId = userId
+    session.sessionId = sessionId
+    session._modified = true
 
-    ctx.auditLog.info(`<User:${user.uid}> logged in via ${provider} OAuth`)
+    c.get('auditLog').info(`<User:${user.uid}> logged in via ${prov} OAuth`)
   } else {
-    return createErrorResponse(ctx, ErrorCode.BadRequest, 'Invalid OAuth action')
+    return createErrorResponse(c, ErrorCode.BadRequest, 'Invalid OAuth action')
   }
   const updatedConnection = await oauthService
     .upsertOAuthConnection(user._id, connection)
@@ -106,24 +108,24 @@ export async function handleOAuthCallback (ctx: Context) {
     action: stateData.action,
     connection: updatedConnection,
   })
-  return createEnvelopedResponse(ctx, response)
+  return createEnvelopedResponse(c, response)
 }
 
-export async function getUserOAuthConnections (ctx: Context) {
-  const profile = await loadProfile(ctx)
+export async function getUserOAuthConnections (c: AppContext) {
+  const profile = await loadProfile(c)
   const connections = await oauthService.getUserOAuthConnections(profile._id)
   const result = OAuthUserConnectionsQueryResultSchema.encode(connections)
-  return createEnvelopedResponse(ctx, result)
+  return createEnvelopedResponse(c, result)
 }
 
-function registerOAuthHandlers (router: Router) {
-  const oauthRouter = new Router({ prefix: '/oauth' })
+function registerOAuthHandlers (app: Hono<HonoEnv>) {
+  const oauthApp = new Hono<HonoEnv>()
 
-  oauthRouter.get('/', loginRequire, getUserOAuthConnections)
-  oauthRouter.get('/:provider/url', generateOAuthUrl)
-  oauthRouter.get('/:provider/callback', handleOAuthCallback)
+  oauthApp.get('/', loginRequire, getUserOAuthConnections)
+  oauthApp.get('/:provider/url', generateOAuthUrl)
+  oauthApp.get('/:provider/callback', handleOAuthCallback)
 
-  router.use(oauthRouter.routes(), oauthRouter.allowedMethods())
+  app.route('/oauth', oauthApp)
 }
 
 export default registerOAuthHandlers

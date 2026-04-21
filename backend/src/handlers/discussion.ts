@@ -1,7 +1,7 @@
-import type { Context } from 'koa'
+import type { AppContext, HonoEnv } from '../types/koa'
 import type { Types } from 'mongoose'
 import type { DiscussionQueryFilters } from '../services/discussion'
-import Router from '@koa/router'
+import { Hono } from 'hono'
 import {
   CommentCreatePayloadSchema,
   DiscussionCreatePayloadSchema,
@@ -25,13 +25,13 @@ import {
   createZodErrorResponse,
 } from '../utils'
 
-async function findDiscussions (ctx: Context) {
-  const query = DiscussionListQuerySchema.safeParse(ctx.request.query)
+async function findDiscussions (c: AppContext) {
+  const query = DiscussionListQuerySchema.safeParse(c.req.query())
   if (!query.success) {
-    return createZodErrorResponse(ctx, query.error)
+    return createZodErrorResponse(c, query.error)
   }
 
-  const { profile } = ctx.state
+  const profile = c.get('profile')
   const { page, pageSize, sort, sortBy, type, author } = query.data
 
   const queryFilter: DiscussionQueryFilters = {}
@@ -64,16 +64,16 @@ async function findDiscussions (ctx: Context) {
     { author: [ 'uid', 'avatar' ], problem: [ 'pid' ], contest: [ 'contestId' ] },
   )
   const result = DiscussionListQueryResultSchema.encode(discussions)
-  return createEnvelopedResponse(ctx, result)
+  return createEnvelopedResponse(c, result)
 }
 
-async function getDiscussion (ctx: Context) {
-  const discussionState = await loadDiscussion(ctx)
+async function getDiscussion (c: AppContext) {
+  const discussionState = await loadDiscussion(c)
   if (!discussionState) {
-    return createErrorResponse(ctx, ErrorCode.NotFound, 'Discussion not found or access denied')
+    return createErrorResponse(c, ErrorCode.NotFound, 'Discussion not found or access denied')
   }
 
-  const { profile } = ctx.state
+  const profile = c.get('profile')
   const { discussion, isJury } = discussionState
   const comments = await discussionService.getComments(discussion._id, {
     showHidden: profile?.isAdmin ?? false,
@@ -82,21 +82,22 @@ async function getDiscussion (ctx: Context) {
   const result = DiscussionDetailQueryResultSchema.encode({
     ...discussion, comments, isJury,
   })
-  return createEnvelopedResponse(ctx, result)
+  return createEnvelopedResponse(c, result)
 }
 
-async function createDiscussion (ctx: Context) {
-  const payload = DiscussionCreatePayloadSchema.safeParse(ctx.request.body)
+async function createDiscussion (c: AppContext) {
+  const body = await c.req.json().catch(() => ({}))
+  const payload = DiscussionCreatePayloadSchema.safeParse(body)
   if (!payload.success) {
-    return createZodErrorResponse(ctx, payload.error)
+    return createZodErrorResponse(c, payload.error)
   }
 
-  const profile = await loadProfile(ctx)
+  const profile = await loadProfile(c)
   let isManaged = profile.isAdmin ?? false
 
   let problem: Types.ObjectId | null = null
   if (payload.data.problem) {
-    const problemDoc = await loadProblemOrThrow(ctx, payload.data.problem, payload.data.contest)
+    const problemDoc = await loadProblemOrThrow(c, payload.data.problem, payload.data.contest)
 
     problem = problemDoc._id
     if (!isManaged && problemDoc.owner?.equals(profile._id) === true) {
@@ -106,14 +107,14 @@ async function createDiscussion (ctx: Context) {
 
   let contest: Types.ObjectId | null = null
   if (payload.data.contest) {
-    const contestState = await loadContestState(ctx, payload.data.contest)
+    const contestState = await loadContestState(c, payload.data.contest)
     if (!contestState || !contestState.accessible) {
-      return createErrorResponse(ctx, ErrorCode.NotFound, 'Contest not found or access denied')
+      return createErrorResponse(c, ErrorCode.NotFound, 'Contest not found or access denied')
     }
 
     contest = contestState.contest._id || null
     if (contestState.contest.course) {
-      const role = await loadCourseRoleById(ctx, contestState.contest.course)
+      const role = await loadCourseRoleById(c, contestState.contest.course)
       if (role?.manageContest) {
         isManaged = true
       }
@@ -124,62 +125,63 @@ async function createDiscussion (ctx: Context) {
   const author = profile._id
 
   if (publicDiscussionTypes.includes(type) && !isManaged) {
-    return createErrorResponse(ctx, ErrorCode.Forbidden, 'Insufficient privileges to create this type of discussion')
+    return createErrorResponse(c, ErrorCode.Forbidden, 'Insufficient privileges to create this type of discussion')
   }
 
   try {
     const discussion = await discussionService.createDiscussion({
       author, problem, contest, type, title, content,
     })
-    ctx.auditLog.info(`<Discussion:${discussion.discussionId}> created by <User:${profile.uid}>`)
-    return createEnvelopedResponse(ctx, { discussionId: discussion.discussionId })
+    c.get('auditLog').info(`<Discussion:${discussion.discussionId}> created by <User:${profile.uid}>`)
+    return createEnvelopedResponse(c, { discussionId: discussion.discussionId })
   } catch (err) {
-    ctx.auditLog.error('Failed to create discussion', err)
-    return createErrorResponse(ctx, ErrorCode.InternalServerError)
+    c.get('auditLog').error('Failed to create discussion', err)
+    return createErrorResponse(c, ErrorCode.InternalServerError)
   }
 }
 
-async function createComment (ctx: Context) {
-  const payload = CommentCreatePayloadSchema.safeParse(ctx.request.body)
+async function createComment (c: AppContext) {
+  const body = await c.req.json().catch(() => ({}))
+  const payload = CommentCreatePayloadSchema.safeParse(body)
   if (!payload.success) {
-    return createZodErrorResponse(ctx, payload.error)
+    return createZodErrorResponse(c, payload.error)
   }
 
-  const discussionState = await loadDiscussion(ctx)
+  const discussionState = await loadDiscussion(c)
   if (!discussionState) {
-    return createErrorResponse(ctx, ErrorCode.NotFound, 'Discussion not found or access denied')
+    return createErrorResponse(c, ErrorCode.NotFound, 'Discussion not found or access denied')
   }
 
   const { discussion, isJury } = discussionState
   const isAnnouncement = discussion.type === DiscussionType.PublicAnnouncement
   const isArchived = discussion.type === DiscussionType.ArchivedDiscussion
   if (isArchived || (isAnnouncement && !isJury)) {
-    return createErrorResponse(ctx, ErrorCode.Forbidden, 'Comments are not allowed for this discussion')
+    return createErrorResponse(c, ErrorCode.Forbidden, 'Comments are not allowed for this discussion')
   }
 
-  const profile = await loadProfile(ctx)
+  const profile = await loadProfile(c)
   try {
     const comment = await discussionService.createComment(
       discussion._id, { author: profile._id, content: payload.data.content },
     )
-    ctx.auditLog.info(`<Comment:${comment.commentId}> created in <Discussion:${discussion.discussionId}> by <User:${profile.uid}>`)
-    return createEnvelopedResponse(ctx, null)
+    c.get('auditLog').info(`<Comment:${comment.commentId}> created in <Discussion:${discussion.discussionId}> by <User:${profile.uid}>`)
+    return createEnvelopedResponse(c, null)
   } catch (err) {
-    ctx.auditLog.error('Failed to create comment', err)
-    return createErrorResponse(ctx, ErrorCode.InternalServerError)
+    c.get('auditLog').error('Failed to create comment', err)
+    return createErrorResponse(c, ErrorCode.InternalServerError)
   }
 }
 
-function registerDiscussionHandlers (router: Router) {
-  const discussionRouter = new Router({ prefix: '/discussions' })
+function registerDiscussionHandlers (app: Hono<HonoEnv>) {
+  const discussionApp = new Hono<HonoEnv>()
 
-  discussionRouter.get('/', findDiscussions)
-  discussionRouter.post('/', loginRequire, discussionCreateLimit, createDiscussion)
+  discussionApp.get('/', findDiscussions)
+  discussionApp.post('/', loginRequire, discussionCreateLimit, createDiscussion)
 
-  discussionRouter.get('/:discussionId', getDiscussion)
-  discussionRouter.post('/:discussionId/comments', loginRequire, commentCreateLimit, createComment)
+  discussionApp.get('/:discussionId', getDiscussion)
+  discussionApp.post('/:discussionId/comments', loginRequire, commentCreateLimit, createComment)
 
-  router.use(discussionRouter.routes(), discussionRouter.allowedMethods())
+  app.route('/discussions', discussionApp)
 }
 
 export default registerDiscussionHandlers

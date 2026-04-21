@@ -1,7 +1,8 @@
-import type { Context } from 'koa'
+import type { AppContext } from '../types/koa'
 import type { Types } from 'mongoose'
 import type { CourseRole, WithId } from '../types'
 import type { CourseEntity } from '../types/entity'
+import { HTTPException } from 'hono/http-exception'
 import Course from '../models/Course'
 import courseService from '../services/course'
 import { ERR_NOT_FOUND } from '../utils/constants'
@@ -11,58 +12,58 @@ export interface CourseState {
   role: CourseRole
 }
 
-async function _loadCourseState (ctx: Context, query: { _id: Types.ObjectId } | { courseId: number }) {
+async function _loadCourseState (c: AppContext, query: { _id: Types.ObjectId } | { courseId: number }) {
   const course = await Course.findOne(query).lean()
   if (!course) {
     return null
   }
 
-  const profile = ctx.state.profile
+  const profile = c.get('profile')
   const role = await courseService.getUserRole(profile, course)
   const state: CourseState = { course, role }
 
-  ctx.state.course = state
+  c.set('course', state)
   return state
 }
 
-export async function loadCourseState (ctx: Context, inputId?: number | string) {
-  const courseId = Number(inputId ?? ctx.params.courseId)
+export async function loadCourseState (c: AppContext, inputId?: number | string) {
+  const courseId = Number(inputId ?? c.req.param('courseId'))
   if (!Number.isInteger(courseId) || courseId <= 0) {
     return null
   }
-  if (ctx.state.course?.course.courseId === courseId) {
-    return ctx.state.course
+  if (c.get('course')?.course.courseId === courseId) {
+    return c.get('course')!
   }
-  return await _loadCourseState(ctx, { courseId })
+  return await _loadCourseState(c, { courseId })
 }
 
-export async function loadCourseStateById (ctx: Context, objectId: Types.ObjectId | null) {
+export async function loadCourseStateById (c: AppContext, objectId: Types.ObjectId | null) {
   if (!objectId) {
     return null
   }
-  if (ctx.state.course?.course._id.equals(objectId)) {
-    return ctx.state.course
+  if (c.get('course')?.course._id.equals(objectId)) {
+    return c.get('course')!
   }
-  return await _loadCourseState(ctx, { _id: objectId })
+  return await _loadCourseState(c, { _id: objectId })
 }
 
-export async function loadCourseById (ctx: Context, objectId: Types.ObjectId | null) {
-  const state = await loadCourseStateById(ctx, objectId)
+export async function loadCourseById (c: AppContext, objectId: Types.ObjectId | null) {
+  const state = await loadCourseStateById(c, objectId)
   return state?.course ?? null
 }
 
-export async function loadCourseRoleById (ctx: Context, objectId: Types.ObjectId | null) {
-  const state = await loadCourseStateById(ctx, objectId)
+export async function loadCourseRoleById (c: AppContext, objectId: Types.ObjectId | null) {
+  const state = await loadCourseStateById(c, objectId)
   return state?.role ?? null
 }
 
 /**
  * @deprecated Controller should handle error throwing
  */
-export async function loadCourseStateOrThrow (ctx: Context, inputId?: number | string) {
-  const state = await loadCourseState(ctx, inputId)
+export async function loadCourseStateOrThrow (c: AppContext, inputId?: number | string) {
+  const state = await loadCourseState(c, inputId)
   if (!state) {
-    ctx.throw(...ERR_NOT_FOUND)
+    throw new HTTPException(ERR_NOT_FOUND[0] as number, { message: ERR_NOT_FOUND[1] })
   }
   return state
 }

@@ -1,35 +1,39 @@
-import type { Context, Middleware } from 'koa'
-import ratelimit from 'koa-ratelimit'
+import type { MiddlewareHandler } from 'hono'
+import type { HonoEnv } from '../types/koa'
 import config from '../config'
 import redis from '../config/redis'
 
 function createRatelimitMiddleware (
   duration: number,
   max: number,
-  id: (ctx: Context) => string,
-): Middleware {
+  id: (c: any) => string,
+): MiddlewareHandler<HonoEnv> {
   if (config.disableRateLimit) {
     return async (_, next) => { await next() }
   }
-  return ratelimit({
-    driver: 'redis',
-    db: redis as any,
-    duration: duration * 1000,
-    errorMessage: 'Rate limit exceeded, please try again later.',
-    id: id as any,
-    max,
-  }) as any
+  return async (c, next) => {
+    const key = `ratelimit:${id(c)}`
+    const current = await redis.incr(key)
+    if (current === 1) {
+      await redis.expire(key, duration)
+    }
+    if (current > max) {
+      return c.json({ success: false, code: 429, message: 'Rate limit exceeded, please try again later.' }, 429)
+    }
+    await next()
+  }
 }
 
 export function limitByIp (prefixKey: string, duration: number, max: number) {
-  return createRatelimitMiddleware(duration, max, (ctx) => {
-    return `${prefixKey}:${ctx.state.clientIp.replace(/:/g, '_')}`
+  return createRatelimitMiddleware(duration, max, (c) => {
+    const ip = (c.get('clientIp') || '').replace(/:/g, '_')
+    return `${prefixKey}:${ip}`
   })
 }
 
 export function limitByUser (prefixKey: string, duration: number, max: number) {
-  return createRatelimitMiddleware(duration, max, (ctx) => {
-    const username = ctx.state.profile?.uid || 'anonymous'
+  return createRatelimitMiddleware(duration, max, (c) => {
+    const username = c.get('profile')?.uid || 'anonymous'
     return `${prefixKey}:${username}`
   })
 }

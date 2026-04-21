@@ -1,21 +1,21 @@
-import type { Context } from 'koa'
-import Router from '@koa/router'
+import type { AppContext, HonoEnv } from '../types/koa'
+import { Hono } from 'hono'
 import { TagListQueryResultSchema } from '@putongoj/shared'
 import tagService from '../services/tag'
 import { createEnvelopedResponse } from '../utils'
 
-export async function findTags (ctx: Context) {
+export async function findTags (c: AppContext) {
   const tags = await tagService.getTags()
   const result = TagListQueryResultSchema.encode(tags)
-  return createEnvelopedResponse(ctx, result)
+  return createEnvelopedResponse(c, result)
 }
 
-function registerTagHandlers (router: Router) {
-  const tagRouter = new Router({ prefix: '/tags' })
+function registerTagHandlers (app: Hono<HonoEnv>) {
+  const tagApp = new Hono<HonoEnv>()
 
-  tagRouter.get('/', findTags)
+  tagApp.get('/', findTags)
 
-  router.use(tagRouter.routes(), tagRouter.allowedMethods())
+  app.route('/tags', tagApp)
 }
 
 export default registerTagHandlers

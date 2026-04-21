@@ -1,6 +1,6 @@
-import type { Context } from 'koa'
+import type { AppContext, HonoEnv } from '../types/koa'
 import { env } from 'node:process'
-import Router from '@koa/router'
+import { Hono } from 'hono'
 import { AvatarPresetsQueryResultSchema, PublicConfigQueryResultSchema } from '@putongoj/shared'
 import { v4 } from 'uuid'
 import { globalConfig } from '../config'
@@ -25,13 +25,13 @@ function parseBuildTime (): Date | null {
 const commitHash = env.NODE_BUILD_SHA || 'unknown'
 const buildAt = parseBuildTime()
 
-const serverTime = (ctx: Context) => {
-  ctx.body = {
+const serverTime = (c: AppContext) => {
+  return c.json({
     serverTime: Date.now(),
-  }
+  })
 }
 
-export async function getPublicConfig (ctx: Context) {
+export async function getPublicConfig (c: AppContext) {
   const { helpDocURL, oauthConfigs, umamiAnalytics } = globalConfig
   const apiPublicKey = await cryptoService.getServerPublicKey()
   const result = PublicConfigQueryResultSchema.encode({
@@ -53,31 +53,31 @@ export async function getPublicConfig (ctx: Context) {
         }
       : undefined,
   })
-  return createEnvelopedResponse(ctx, result)
+  return createEnvelopedResponse(c, result)
 }
 
-export async function getWebSocketToken (ctx: Context) {
-  const profile = await loadProfile(ctx)
+export async function getWebSocketToken (c: AppContext) {
+  const profile = await loadProfile(c)
   const token = v4()
   await redis.setex(`websocket:token:${token}`, 10, profile.uid)
-  return createEnvelopedResponse(ctx, { token })
+  return createEnvelopedResponse(c, { token })
 }
 
-export async function getAvatarPresets (ctx: Context) {
+export async function getAvatarPresets (c: AppContext) {
   const presets = await settingsService.getAvatarPresets()
   const result = AvatarPresetsQueryResultSchema.parse(presets)
-  return createEnvelopedResponse(ctx, result)
+  return createEnvelopedResponse(c, result)
 }
 
-function registerUtilsHandlers (router: Router) {
-  const utilsRouter = new Router()
+function registerUtilsHandlers (app: Hono<HonoEnv>) {
+  const utilsApp = new Hono<HonoEnv>()
 
-  utilsRouter.get('/servertime', serverTime)
-  utilsRouter.get('/config', getPublicConfig)
-  utilsRouter.get('/websocket/token', loginRequire, getWebSocketToken)
-  utilsRouter.get('/utils/avatar-presets', loginRequire, getAvatarPresets)
+  utilsApp.get('/servertime', serverTime)
+  utilsApp.get('/config', getPublicConfig)
+  utilsApp.get('/websocket/token', loginRequire, getWebSocketToken)
+  utilsApp.get('/utils/avatar-presets', loginRequire, getAvatarPresets)
 
-  router.use(utilsRouter.routes(), utilsRouter.allowedMethods())
+  app.route('/', utilsApp)
 }
 
 export default registerUtilsHandlers

@@ -1,6 +1,7 @@
-import type { Context } from 'koa'
+import type { AppContext, HonoEnv } from '../types/koa'
 import type { UserDocument } from '../models/User'
-import Router from '@koa/router'
+import { Hono } from 'hono'
+import { HTTPException } from 'hono/http-exception'
 import {
   ErrorCode,
   JudgeStatus,
@@ -27,54 +28,54 @@ import {
 import { ERR_INVALID_ID, ERR_NOT_FOUND } from '../utils/constants'
 
 export async function loadUser (
-  ctx: Context,
+  c: AppContext,
   input?: string,
 ): Promise<UserDocument> {
-  const uid = String(ctx.params.uid || input || '').trim()
+  const uid = String(c.req.param('uid') || input || '').trim()
   if (!uid) {
-    ctx.throw(...ERR_INVALID_ID)
+    throw new HTTPException(ERR_INVALID_ID[0] as number, { message: ERR_INVALID_ID[1] })
   }
-  if (ctx.state.user?.uid === uid) {
-    return ctx.state.user
+  if (c.get('user')?.uid === uid) {
+    return c.get('user')!
   }
 
   const user = await userService.getUser(uid)
   if (!user) {
-    ctx.throw(...ERR_NOT_FOUND)
+    throw new HTTPException(ERR_NOT_FOUND[0] as number, { message: ERR_NOT_FOUND[1] })
   }
 
-  ctx.state.user = user
+  c.set('user', user)
   return user
 }
 
-export async function findRanklist (ctx: Context) {
-  const query = UserRanklistQuerySchema.safeParse(ctx.request.query)
+export async function findRanklist (c: AppContext) {
+  const query = UserRanklistQuerySchema.safeParse(c.req.query())
   if (!query.success) {
-    return createZodErrorResponse(ctx, query.error)
+    return createZodErrorResponse(c, query.error)
   }
 
   const users = await userService.findRanklist(query.data)
   const result = UserRanklistQueryResultSchema.encode(users)
-  return createEnvelopedResponse(ctx, result)
+  return createEnvelopedResponse(c, result)
 }
 
-export async function exportRanklist (ctx: Context) {
-  const query = UserRanklistExportQuerySchema.safeParse(ctx.request.query)
+export async function exportRanklist (c: AppContext) {
+  const query = UserRanklistExportQuerySchema.safeParse(c.req.query())
   if (!query.success) {
-    return createZodErrorResponse(ctx, query.error)
+    return createZodErrorResponse(c, query.error)
   }
-  const profile = await loadProfile (ctx)
+  const profile = await loadProfile(c)
   if (!query.data.group && !profile.isAdmin) {
-    return createErrorResponse(ctx, ErrorCode.Forbidden, 'Insufficient privilege to export full ranklist')
+    return createErrorResponse(c, ErrorCode.Forbidden, 'Insufficient privilege to export full ranklist')
   }
 
   const users = await userService.exportRanklist(query.data)
   const result = UserRanklistExportQueryResultSchema.encode(users)
-  return createEnvelopedResponse(ctx, result)
+  return createEnvelopedResponse(c, result)
 }
 
-export async function getUser (ctx: Context) {
-  const user = await loadUser(ctx)
+export async function getUser (c: AppContext) {
+  const user = await loadUser(c)
   const [ solved, failed, groups, submissionHeatmap ] = await Promise.all([
     Solution
       .find({ uid: user.uid, judge: JudgeStatus.Accepted })
@@ -96,36 +97,36 @@ export async function getUser (ctx: Context) {
   const result = UserProfileQueryResultSchema.encode({
     ...user.toObject(), groups, solved, attempted, codeforces, submissionHeatmap,
   })
-  return createEnvelopedResponse(ctx, result)
+  return createEnvelopedResponse(c, result)
 }
 
-export async function suggestUsers (ctx: Context) {
-  const query = UserSuggestQuerySchema.safeParse(ctx.request.query)
+export async function suggestUsers (c: AppContext) {
+  const query = UserSuggestQuerySchema.safeParse(c.req.query())
   if (!query.success) {
-    return createZodErrorResponse(ctx, query.error)
+    return createZodErrorResponse(c, query.error)
   }
 
   const users = await userService.suggestUsers(query.data.keyword, 10)
   const result = UserSuggestQueryResultSchema.encode(users)
-  return createEnvelopedResponse(ctx, result)
+  return createEnvelopedResponse(c, result)
 }
 
-export async function getAllUserItems (ctx: Context) {
+export async function getAllUserItems (c: AppContext) {
   const users = await userService.getAllUserItems()
   const result = UserItemListQueryResultSchema.encode(users)
-  return createEnvelopedResponse(ctx, result)
+  return createEnvelopedResponse(c, result)
 }
 
-function registerUserHandlers (router: Router) {
-  const userRouter = new Router({ prefix: '/users' })
+function registerUserHandlers (app: Hono<HonoEnv>) {
+  const userApp = new Hono<HonoEnv>()
 
-  userRouter.get('/items', adminRequire, getAllUserItems)
-  userRouter.get('/suggest', loginRequire, suggestUsers)
-  userRouter.get('/ranklist', findRanklist)
-  userRouter.get('/ranklist/export', loginRequire, dataExportLimit, exportRanklist)
-  userRouter.get('/:uid', getUser)
+  userApp.get('/items', adminRequire, getAllUserItems)
+  userApp.get('/suggest', loginRequire, suggestUsers)
+  userApp.get('/ranklist', findRanklist)
+  userApp.get('/ranklist/export', loginRequire, dataExportLimit, exportRanklist)
+  userApp.get('/:uid', getUser)
 
-  router.use(userRouter.routes(), userRouter.allowedMethods())
+  app.route('/users', userApp)
 }
 
 export default registerUserHandlers

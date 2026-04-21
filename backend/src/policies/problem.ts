@@ -1,6 +1,7 @@
-import type { Context } from 'koa'
+import type { AppContext } from '../types/koa'
 import type { Types } from 'mongoose'
 import type { ProblemDocumentPopulated } from '../models/Problem'
+import { HTTPException } from 'hono/http-exception'
 import { loadContestState } from '../policies/contest'
 import courseService from '../services/course'
 import problemService from '../services/problem'
@@ -12,20 +13,20 @@ export interface ProblemState {
   problem: ProblemDocumentPopulated
 }
 
-function buildProblemState (ctx: Context, problem: ProblemDocumentPopulated) {
+function buildProblemState (c: AppContext, problem: ProblemDocumentPopulated) {
   const state: ProblemState = { problem }
 
-  ctx.state.problem = state
+  c.set('problem', state)
   return state
 }
 
-export async function loadProblemState (ctx: Context, inputId?: string | number, fromContestId?: number): Promise<ProblemState | null> {
-  const problemId = Number(inputId ?? ctx.params.pid ?? ctx.request.query.pid)
+export async function loadProblemState (c: AppContext, inputId?: string | number, fromContestId?: number): Promise<ProblemState | null> {
+  const problemId = Number(inputId ?? c.req.param('pid') ?? c.req.query('pid'))
   if (!Number.isInteger(problemId) || problemId <= 0) {
     return null
   }
-  if (ctx.state.problem?.problem.pid === problemId) {
-    return ctx.state.problem
+  if (c.get('problem')?.problem.pid === problemId) {
+    return c.get('problem')!
   }
 
   const problem = await problemService.getProblem(problemId)
@@ -34,31 +35,31 @@ export async function loadProblemState (ctx: Context, inputId?: string | number,
   }
 
   if (problem.status === status.Available) {
-    return buildProblemState(ctx, problem)
+    return buildProblemState(c, problem)
   }
 
-  const { profile } = ctx.state
+  const profile = c.get('profile')
   if (profile && profile.isAdmin) {
-    return buildProblemState(ctx, problem)
+    return buildProblemState(c, problem)
   }
 
-  const contestId = Number(fromContestId ?? ctx.request.query.cid)
+  const contestId = Number(fromContestId ?? c.req.query('cid'))
   if (Number.isInteger(contestId) && contestId > 0) {
-    const contestState = await loadContestState(ctx, contestId)
+    const contestState = await loadContestState(c, contestId)
     if (contestState && contestState.accessible) {
       const { contest } = contestState
       if (contest.problems.some((p: Types.ObjectId) => p.equals(problem._id))) {
-        return buildProblemState(ctx, problem)
+        return buildProblemState(c, problem)
       }
     }
   }
 
   if (profile && problem.owner && problem.owner.equals(profile._id)) {
-    return buildProblemState(ctx, problem)
+    return buildProblemState(c, problem)
   }
 
   if (profile && await courseService.hasProblemRole(profile._id, problem._id, 'basic')) {
-    return buildProblemState(ctx, problem)
+    return buildProblemState(c, problem)
   }
 
   return null
@@ -67,10 +68,10 @@ export async function loadProblemState (ctx: Context, inputId?: string | number,
 /**
  * @deprecated Controller should handle error throwing
  */
-export async function loadProblemOrThrow (ctx: Context, inputId?: string | number, fromContestId?: number) {
-  const problemState = await loadProblemState(ctx, inputId, fromContestId)
+export async function loadProblemOrThrow (c: AppContext, inputId?: string | number, fromContestId?: number) {
+  const problemState = await loadProblemState(c, inputId, fromContestId)
   if (!problemState) {
-    ctx.throw(...ERR_NOT_FOUND)
+    throw new HTTPException(ERR_NOT_FOUND[0] as number, { message: ERR_NOT_FOUND[1] })
   }
   return problemState.problem
 }

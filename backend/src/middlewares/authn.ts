@@ -1,80 +1,86 @@
-import type { Context, Middleware } from 'koa'
+import type { MiddlewareHandler } from 'hono'
+import type { AppContext, HonoEnv } from '../types/koa'
 import type { UserDocument } from '../models/User'
+import { HTTPException } from 'hono/http-exception'
 import User from '../models/User'
 import sessionService from '../services/session'
 import { ERR_LOGIN_REQUIRE, ERR_PERM_DENIED } from '../utils/constants'
 
-export async function checkSession (ctx: Context): Promise<UserDocument | undefined> {
-  if (ctx.state.authnChecked) {
-    return ctx.state.profile
+export async function checkSession (c: AppContext): Promise<UserDocument | undefined> {
+  if (c.get('authnChecked')) {
+    return c.get('profile')
   }
-  ctx.state.authnChecked = true
+  c.set('authnChecked', true)
 
-  const { userId, sessionId } = ctx.session
+  const session = c.get('session')
+  const { userId, sessionId } = session
   if (!userId || !sessionId) {
     return
   }
 
   const sessionInfo = await sessionService.accessSession(userId, sessionId)
   if (!sessionInfo) {
-    ctx.auditLog.warn(`Session ${sessionId} not found in Redis, clearing cookie`)
-    delete ctx.session.userId
-    delete ctx.session.sessionId
+    c.get('auditLog').warn(`Session ${sessionId} not found in Redis, clearing cookie`)
+    delete session.userId
+    delete session.sessionId
+    session._modified = true
     return
   }
 
   const user = await User.findById(userId)
   if (!user) {
-    ctx.auditLog.warn(`User ${userId} not found, revoking <Session:${sessionId}>`)
+    c.get('auditLog').warn(`User ${userId} not found, revoking <Session:${sessionId}>`)
     await sessionService.revokeSession(userId, sessionId)
-    delete ctx.session.userId
-    delete ctx.session.sessionId
+    delete session.userId
+    delete session.sessionId
+    session._modified = true
     return
   }
   if (user.isBanned) {
-    ctx.auditLog.warn(`<User:${user.uid}> is banned, revoking <Session:${sessionId}>`)
+    c.get('auditLog').warn(`<User:${user.uid}> is banned, revoking <Session:${sessionId}>`)
     await sessionService.revokeSession(userId, sessionId)
-    delete ctx.session.userId
-    delete ctx.session.sessionId
+    delete session.userId
+    delete session.sessionId
+    session._modified = true
     return
   }
 
   if ((user.lastVisitedAt?.getTime() ?? 0) < Date.now() - 5 * 1000) {
-    user.lastRequestId = ctx.state.requestId
+    user.lastRequestId = c.get('requestId')
     user.lastVisitedAt = new Date()
     await user.save()
   }
 
-  ctx.state.profile = user
-  ctx.state.sessionId = sessionId
+  c.set('profile', user)
+  c.set('sessionId', sessionId)
   return user
 }
 
-export async function loadProfile (ctx: Context): Promise<UserDocument> {
-  const profile = await checkSession(ctx)
+export async function loadProfile (c: AppContext): Promise<UserDocument> {
+  const profile = await checkSession(c)
   if (!profile) {
-    return ctx.throw(...ERR_LOGIN_REQUIRE)
+    throw new HTTPException(ERR_LOGIN_REQUIRE[0] as number, { message: ERR_LOGIN_REQUIRE[1] })
   }
   return profile
 }
 
-export const loginRequire: Middleware = async (ctx, next) => {
-  await loadProfile(ctx)
+export const loginRequire: MiddlewareHandler<HonoEnv> = async (c, next) => {
+  await loadProfile(c)
   await next()
 }
 
-export const adminRequire: Middleware = async (ctx, next) => {
-  const profile = await loadProfile(ctx)
+export const adminRequire: MiddlewareHandler<HonoEnv> = async (c, next) => {
+  const profile = await loadProfile(c)
   if (!profile.isAdmin) {
-    return ctx.throw(...ERR_PERM_DENIED)
+    throw new HTTPException(ERR_PERM_DENIED[0] as number, { message: ERR_PERM_DENIED[1] })
   }
   await next()
 }
 
-export const rootRequire: Middleware = async (ctx, next) => {
-  const profile = await loadProfile(ctx)
+export const rootRequire: MiddlewareHandler<HonoEnv> = async (c, next) => {
+  const profile = await loadProfile(c)
   if (!profile.isRoot) {
-    return ctx.throw(...ERR_PERM_DENIED)
+    throw new HTTPException(ERR_PERM_DENIED[0] as number, { message: ERR_PERM_DENIED[1] })
   }
   await next()
 }

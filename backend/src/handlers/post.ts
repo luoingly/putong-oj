@@ -1,5 +1,5 @@
-import type Router from '@koa/router'
-import type { Context } from 'koa'
+import type { Hono } from 'hono'
+import type { AppContext, HonoEnv } from '../types/koa'
 import {
   ErrorCode,
   PostDetailQueryResultSchema,
@@ -14,10 +14,10 @@ import {
   createZodErrorResponse,
 } from '../utils'
 
-async function findPosts (ctx: Context) {
-  const query = PostListQuerySchema.safeParse(ctx.request.query)
+async function findPosts (c: AppContext) {
+  const query = PostListQuerySchema.safeParse(c.req.query())
   if (!query.success) {
-    return createZodErrorResponse(ctx, query.error)
+    return createZodErrorResponse(c, query.error)
   }
 
   const { page, pageSize } = query.data
@@ -25,22 +25,22 @@ async function findPosts (ctx: Context) {
     { page, pageSize, sortBy: 'publishesAt', sort: -1 },
     { isPublished: true, isHidden: false })
   const result = PostListQueryResultSchema.encode(posts)
-  return createEnvelopedResponse(ctx, result)
+  return createEnvelopedResponse(c, result)
 }
 
-async function getPost (ctx: Context) {
-  const postState = await loadPost(ctx)
+async function getPost (c: AppContext) {
+  const postState = await loadPost(c)
   if (!postState) {
-    return createErrorResponse(ctx, ErrorCode.NotFound, 'Post not found')
+    return createErrorResponse(c, ErrorCode.NotFound, 'Post not found')
   }
 
   const result = PostDetailQueryResultSchema.encode(postState.post)
-  return createEnvelopedResponse(ctx, result)
+  return createEnvelopedResponse(c, result)
 }
 
-function registerPostHandlers (router: Router) {
-  router.get('/posts', findPosts)
-  router.get('/posts/:slug', getPost)
+function registerPostHandlers (app: Hono<HonoEnv>) {
+  app.get('/posts', findPosts)
+  app.get('/posts/:slug', getPost)
 }
 
 export default registerPostHandlers

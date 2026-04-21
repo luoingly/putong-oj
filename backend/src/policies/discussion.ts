@@ -1,5 +1,5 @@
-import type { Context } from 'koa'
 import type { DiscussionDocument } from '../services/discussion'
+import type { AppContext } from '../types/koa'
 import { DiscussionType } from '@putongoj/shared'
 import discussionService from '../services/discussion'
 import { loadContest } from './contest'
@@ -15,13 +15,13 @@ export const publicDiscussionTypes = [
   DiscussionType.PublicAnnouncement,
 ] as DiscussionType[]
 
-export async function loadDiscussion (ctx: Context, inputId?: number | string) {
-  const discussionId = Number(inputId ?? ctx.params.discussionId)
+export async function loadDiscussion (c: AppContext, inputId?: number | string) {
+  const discussionId = Number(inputId ?? c.req.param('discussionId'))
   if (!Number.isInteger(discussionId) || discussionId <= 0) {
     return null
   }
-  if (ctx.state.discussion?.discussion.discussionId === discussionId) {
-    return ctx.state.discussion
+  if (c.get('discussion')?.discussion.discussionId === discussionId) {
+    return c.get('discussion')!
   }
 
   const discussion = await discussionService.getDiscussion(discussionId)
@@ -31,14 +31,14 @@ export async function loadDiscussion (ctx: Context, inputId?: number | string) {
 
   let isJury: boolean = false
   if (discussion.contest) {
-    const contest = await loadContest(ctx, discussion.contest.contestId)
-    const role = await loadCourseRoleById(ctx, contest?.course ?? null)
+    const contest = await loadContest(c, discussion.contest.contestId)
+    const role = await loadCourseRoleById(c, contest?.course ?? null)
     if (role && role.manageContest) {
       isJury = true
     }
   }
 
-  const { profile } = ctx.state
+  const profile = c.get('profile')
   const isAdmin = profile?.isAdmin ?? false
   const isAuthor = discussion.author._id.equals(profile?._id)
   const isProblemOwner = discussion.problem?.owner?.equals(profile?._id) ?? false
@@ -50,7 +50,7 @@ export async function loadDiscussion (ctx: Context, inputId?: number | string) {
   if (isPublic || isJury) {
     const state: DiscussionState = { discussion, isJury }
 
-    ctx.state.discussion = state
+    c.set('discussion', state)
     return state
   }
   return null

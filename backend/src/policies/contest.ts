@@ -1,5 +1,5 @@
 import type { ContestModel } from '@putongoj/shared'
-import type { Context } from 'koa'
+import type { AppContext } from '../types/koa'
 import type { WithId } from '../types'
 import { ParticipationStatus } from '@putongoj/shared'
 import { loadProfile } from '../middlewares/authn'
@@ -24,13 +24,13 @@ function getContestTimingState (contest: WithId<ContestModel>, now = new Date())
   return { hasStarted, hasEnded }
 }
 
-export async function loadContestState (ctx: Context, inputId?: number | string) {
-  const contestId = Number(inputId ?? ctx.params.contestId)
+export async function loadContestState (c: AppContext, inputId?: number | string) {
+  const contestId = Number(inputId ?? c.req.param('contestId'))
   if (!Number.isInteger(contestId) || contestId <= 0) {
     return null
   }
-  if (ctx.state.contest?.contest.contestId === contestId) {
-    return ctx.state.contest
+  if (c.get('contest')?.contest.contestId === contestId) {
+    return c.get('contest')!
   }
 
   const contest = await Contest.findOne({ contestId }).lean() as WithId<ContestModel> | null
@@ -38,7 +38,7 @@ export async function loadContestState (ctx: Context, inputId?: number | string)
     return null
   }
 
-  const profile = await loadProfile(ctx)
+  const profile = await loadProfile(c)
   const participation = await contestService.getParticipation(profile._id, contest._id)
 
   let isJury: boolean = false
@@ -46,7 +46,7 @@ export async function loadContestState (ctx: Context, inputId?: number | string)
     isJury = true
   }
   if (contest.course && !isJury) {
-    const role = await loadCourseRoleById(ctx, contest.course)
+    const role = await loadCourseRoleById(c, contest.course)
     if (!role || !role.basic) {
       return null
     }
@@ -56,7 +56,7 @@ export async function loadContestState (ctx: Context, inputId?: number | string)
   }
 
   const isIpBlocked = (contest.ipWhitelistEnabled && !isJury)
-    ? !isIpInWhitelist(ctx.state.clientIp, contest.ipWhitelist ?? [])
+    ? !isIpInWhitelist(c.get('clientIp'), contest.ipWhitelist ?? [])
     : false
 
   // whether accessible to the contents of the contest
@@ -65,11 +65,11 @@ export async function loadContestState (ctx: Context, inputId?: number | string)
   const accessible = qualified && (hasStarted || isJury)
   const state: ContestState = { contest, participation, isJury, accessible, isIpBlocked, hasStarted, hasEnded }
 
-  ctx.state.contest = state
+  c.set('contest', state)
   return state
 }
 
-export async function loadContest (ctx: Context, inputId?: number | string) {
-  const state = await loadContestState(ctx, inputId)
+export async function loadContest (c: AppContext, inputId?: number | string) {
+  const state = await loadContestState(c, inputId)
   return state?.contest ?? null
 }

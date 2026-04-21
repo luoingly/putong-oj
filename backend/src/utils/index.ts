@@ -1,7 +1,7 @@
 import type { Enveloped } from '@putongoj/shared'
-import type { Context } from 'koa'
 import type { ZodError } from 'zod'
 import type { PaginateOption } from '../types'
+import type { AppContext } from '../types/koa'
 import { Buffer } from 'node:buffer'
 import { BlockList, isIPv6 } from 'node:net'
 import { md5, sha1 } from '@noble/hashes/legacy.js'
@@ -67,15 +67,15 @@ export function purify (obj: Record<string, any>) {
   return pickBy(obj, x => x != null && x !== '')
 }
 
-export function createEnvelopedResponse<T> (ctx: Context, data: T): void {
-  const { requestId } = ctx.state
-  ctx.body = <Enveloped<T>>{
+export function createEnvelopedResponse<T> (c: AppContext, data: T): Response {
+  const requestId = c.get('requestId')
+  return c.json(<Enveloped<T>>{
     success: true,
     code: 200,
     message: 'OK',
     data,
     requestId,
-  }
+  })
 }
 
 function getFriendlyErrorMessage (code: ErrorCode): string {
@@ -99,19 +99,19 @@ function getFriendlyErrorMessage (code: ErrorCode): string {
 }
 
 export function createErrorResponse (
-  ctx: Context,
+  c: AppContext,
   code: ErrorCode = ErrorCode.BadRequest,
   msg?: string,
-): void {
-  const { requestId } = ctx.state
+): Response {
+  const requestId = c.get('requestId')
   const message = msg ?? getFriendlyErrorMessage(code)
-  ctx.body = <Enveloped<null>>{
+  return c.json(<Enveloped<null>>{
     success: false,
     code,
     message,
     data: null,
     requestId,
-  }
+  })
 }
 
 function getFriendlyZodErrorMessage (error: ZodError): string {
@@ -127,11 +127,11 @@ function getFriendlyZodErrorMessage (error: ZodError): string {
 }
 
 export function createZodErrorResponse (
-  ctx: Context,
+  c: AppContext,
   error: ZodError,
-): void {
+): Response {
   const message = getFriendlyZodErrorMessage(error)
-  createErrorResponse(ctx, ErrorCode.BadRequest, message)
+  return createErrorResponse(c, ErrorCode.BadRequest, message)
 }
 
 /**

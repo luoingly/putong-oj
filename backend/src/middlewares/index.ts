@@ -1,23 +1,27 @@
-import type { Context, Next } from 'koa'
+import type { MiddlewareHandler } from 'hono'
+import type { HonoEnv } from '../types/koa'
 import { ErrorCode, ErrorCodeValues } from '@putongoj/shared'
-import send from 'koa-send'
+import { getCookie, setCookie, deleteCookie } from 'hono/cookie'
+import { HTTPException } from 'hono/http-exception'
 import config from '../config'
+import { COOKIE_NAME, COOKIE_OPTIONS, decodeCookie, encodeCookie } from '../services/cookieSession'
 import { createErrorResponse } from '../utils'
 import logger from '../utils/logger'
 import authnMiddleware from './authn'
 
-export async function parseClientIp (ctx: Context, next: () => Promise<any>) {
+export const parseClientIp: MiddlewareHandler<HonoEnv> = async (c, next) => {
   const { reverseProxy } = config
-  const remoteIp = ctx.socket.remoteAddress || ctx.ip
+  // @ts-ignore - accessing Node.js socket via Hono node-server env
+  const remoteIp: string = (c.env as any)?.incoming?.socket?.remoteAddress || '127.0.0.1'
   if (!reverseProxy.enabled) {
-    ctx.state.clientIp = remoteIp
+    c.set('clientIp', remoteIp)
     await next()
     return
   }
 
   const { forwardLimit } = reverseProxy
   const trustedProxies = new Set(reverseProxy.trustedProxies)
-  const forwardedHeader = ctx.get(reverseProxy.forwardedForHeader)
+  const forwardedHeader = c.req.header(reverseProxy.forwardedForHeader) || ''
 
   let ipChain: string[] = []
   if (forwardedHeader) {
@@ -45,13 +49,15 @@ export async function parseClientIp (ctx: Context, next: () => Promise<any>) {
     }
   }
 
-  ctx.state.clientIp = clientIp
+  c.set('clientIp', clientIp)
   await next()
 }
 
-export async function setupAuditLog (ctx: Context, next: Next) {
+export const setupAuditLog: MiddlewareHandler<HonoEnv> = async (c, next) => {
   const buildTraceInfo = () => {
-    const { requestId, clientIp, sessionId } = ctx.state
+    const requestId = c.get('requestId')
+    const clientIp = c.get('clientIp')
+    const sessionId = c.get('sessionId')
     const trace = [ `Req ${requestId}`, `IP ${clientIp}` ]
     if (sessionId) {
       trace.push(`Sess ${sessionId}`)
@@ -59,7 +65,7 @@ export async function setupAuditLog (ctx: Context, next: Next) {
     return `[${trace.join(', ')}]`
   }
 
-  ctx.auditLog = {
+  c.set('auditLog', {
     info (message: string) {
       logger.info(`${message} ${buildTraceInfo()}`)
     },
@@ -74,38 +80,68 @@ export async function setupAuditLog (ctx: Context, next: Next) {
     warn (message: string) {
       logger.warn(`${message} ${buildTraceInfo()}`)
     },
-  }
+  })
   await next()
 }
 
-export async function setupRequestContext (ctx: Context, next: Next) {
-  ctx.state.requestId = ctx.get('X-Request-ID') || 'unknown'
-  await authnMiddleware.checkSession(ctx)
+export const setupSession: MiddlewareHandler<HonoEnv> = async (c, next) => {
+  const cookieValue = getCookie(c, COOKIE_NAME)
+  let session = cookieValue
+    ? decodeCookie(cookieValue, config.secretKey) ?? {}
+    : {}
+
+  c.set('session', session)
   await next()
-}
 
-export async function errorHandler (ctx: Context, next: Next) {
-  try {
-    await next()
-  } catch (err: any) {
-    const errorCode = ErrorCodeValues.includes(err.status)
-      ? (err.status as ErrorCode)
-      : ErrorCode.InternalServerError
-    const message: string | undefined = err.expose ? err.message : undefined
-
-    if (errorCode >= ErrorCode.InternalServerError) {
-      ctx.auditLog.error('Unhandled server error', err)
+  // Write session cookie if modified
+  if (session._modified) {
+    if (session.userId || session.sessionId) {
+      const { _modified: _, ...sessionData } = session
+      setCookie(c, COOKIE_NAME, encodeCookie(sessionData, config.secretKey), {
+        ...COOKIE_OPTIONS,
+        maxAge: config.sessionMaxAge,
+      })
     } else {
-      ctx.auditLog.warn(`HTTP/${errorCode}: ${err.message}`)
+      deleteCookie(c, COOKIE_NAME, { path: '/' })
+    }
+  }
+}
+
+export const setupRequestContext: MiddlewareHandler<HonoEnv> = async (c, next) => {
+  c.set('requestId', c.req.header('X-Request-ID') || 'unknown')
+  await authnMiddleware.checkSession(c)
+  await next()
+}
+
+export function createOnError (app: { fetch: any }) {
+  return (err: Error, c: any) => {
+    const auditLog = c.get('auditLog')
+
+    let errorCode: ErrorCode
+    let message: string | undefined
+
+    if (err instanceof HTTPException) {
+      errorCode = ErrorCodeValues.includes(err.status)
+        ? (err.status as ErrorCode)
+        : ErrorCode.InternalServerError
+      message = err.message
+    } else {
+      errorCode = ErrorCode.InternalServerError
+      message = undefined
     }
 
-    createErrorResponse(ctx, errorCode, message)
-  }
-}
+    if (errorCode >= ErrorCode.InternalServerError) {
+      if (auditLog) {
+        auditLog.error('Unhandled server error', err)
+      } else {
+        logger.error('Unhandled server error', err)
+      }
+    } else {
+      if (auditLog) {
+        auditLog.warn(`HTTP/${errorCode}: ${err.message}`)
+      }
+    }
 
-export async function spaFallback (ctx: Context, next: Next) {
-  await next()
-  if (ctx.status === 404) {
-    return send(ctx, 'public/index.html')
+    return createErrorResponse(c, errorCode, message)
   }
 }
