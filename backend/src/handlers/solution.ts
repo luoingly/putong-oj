@@ -1,10 +1,11 @@
-import type { Context } from 'koa'
+import type { AppContext, HonoEnv } from '../types/koa'
 import type { Types } from 'mongoose'
 import type { CourseDocument } from '../models/Course'
 import type { ProblemState } from '../policies/problem'
 import { Buffer } from 'node:buffer'
 import path from 'node:path'
-import Router from '@koa/router'
+import { Hono } from 'hono'
+import { HTTPException } from 'hono/http-exception'
 import {
   ErrorCode,
   JudgeStatus,
@@ -24,18 +25,18 @@ import { loadCourseStateOrThrow } from '../policies/course'
 import { loadProblemState } from '../policies/problem'
 import { createEnvelopedResponse, createErrorResponse, createZodErrorResponse, toObjectRecord } from '../utils'
 
-export async function findOne (ctx: Context) {
-  const opt = Number.parseInt(ctx.params.sid, 10)
+export async function findOne (c: AppContext) {
+  const opt = Number.parseInt(c.req.param('sid'), 10)
   if (!Number.isInteger(opt) || opt <= 0) {
-    ctx.throw(400, 'Invalid submission id')
+    throw new HTTPException(400, { message: 'Invalid submission id' })
   }
 
   const solution = await Solution.findOne({ sid: opt }).lean()
   if (!solution) {
-    ctx.throw(400, 'No such a solution')
+    throw new HTTPException(400, { message: 'No such a solution' })
   }
 
-  const profile = await loadProfile(ctx)
+  const profile = await loadProfile(c)
   const hasPermission = await (async () => {
     if (solution.uid === profile.uid) {
       return true
@@ -48,7 +49,7 @@ export async function findOne (ctx: Context) {
         .findOne({ contestId: solution.mid }, 'course')
         .populate<{ course: CourseDocument }>('course')
       if (contest && contest.course) {
-        const { role } = await loadCourseStateOrThrow(ctx, contest.course.courseId)
+        const { role } = await loadCourseStateOrThrow(c, contest.course.courseId)
         if (role.viewSolution) {
           return true
         }
@@ -57,7 +58,7 @@ export async function findOne (ctx: Context) {
     return false
   })()
   if (!hasPermission) {
-    ctx.throw(403, 'Permission denied')
+    throw new HTTPException(403, { message: 'Permission denied' })
   }
 
   // 如果是 admin 请求，并且有 sim 值(有抄袭嫌隙)，那么也样将可能被抄袭的提交也返回
@@ -66,7 +67,7 @@ export async function findOne (ctx: Context) {
     simSolution = await Solution.findOne({ sid: solution.sim_s_id }).lean().exec()
   }
 
-  ctx.body = {
+  return c.json({
     solution: {
       ...pick(solution, [ 'sid', 'pid', 'uid', 'mid', 'course', 'code', 'language',
         'create', 'status', 'judge', 'time', 'memory', 'error', 'sim', 'sim_s_id', 'testcases' ]),
@@ -74,17 +75,17 @@ export async function findOne (ctx: Context) {
         ? pick(simSolution, [ 'sid', 'uid', 'code', 'create' ])
         : undefined,
     },
-  }
+  })
 }
 
 /**
  * 创建一个提交
  */
-const create = async (ctx: Context) => {
-  const profile = await loadProfile(ctx)
-  const payload = SolutionSubmitPayloadSchema.safeParse(ctx.request.body)
+const create = async (c: AppContext) => {
+  const profile = await loadProfile(c)
+  const payload = SolutionSubmitPayloadSchema.safeParse(await c.req.json().catch(() => ({})))
   if (!payload.success) {
-    return createZodErrorResponse(ctx, payload.error)
+    return createZodErrorResponse(c, payload.error)
   }
 
   const uid = profile.uid
@@ -95,42 +96,42 @@ const create = async (ctx: Context) => {
 
   let problemState: ProblemState | null = null
   if (mid > 0) {
-    const contestState = await loadContestState(ctx, mid)
+    const contestState = await loadContestState(c, mid)
     if (!contestState) {
-      ctx.throw(400, 'No such a contest')
+      throw new HTTPException(400, { message: 'No such a contest' })
     }
     const { contest, accessible, isIpBlocked, isJury } = contestState
 
     if (isIpBlocked) {
-      ctx.throw(403, 'Your IP address is not in the whitelist for this contest')
+      throw new HTTPException(403, { message: 'Your IP address is not in the whitelist for this contest' })
     }
     if (!accessible) {
-      ctx.throw(403, 'Permission denied')
+      throw new HTTPException(403, { message: 'Permission denied' })
     }
 
     const now = new Date()
     if (!isJury && contest.startsAt > now) {
-      ctx.throw(400, 'Contest is not started yet!')
+      throw new HTTPException(400, { message: 'Contest is not started yet!' })
     }
     if (!isJury && contest.endsAt < now) {
-      ctx.throw(400, 'Contest is ended!')
+      throw new HTTPException(400, { message: 'Contest is ended!' })
     }
 
-    problemState = await loadProblemState(ctx, pid, contest.contestId)
+    problemState = await loadProblemState(c, pid, contest.contestId)
     if (!problemState) {
-      ctx.throw(404, 'Problem not found or access denied')
+      throw new HTTPException(404, { message: 'Problem not found or access denied' })
     }
     const contestProblem = problemState.problem
     if (!contest.problems.some((problemId: Types.ObjectId) => problemId.equals(contestProblem._id))) {
-      ctx.throw(400, 'No such a problem in the contest')
+      throw new HTTPException(400, { message: 'No such a problem in the contest' })
     }
     if (contest.allowedLanguages && !contest.allowedLanguages.includes(language)) {
-      ctx.throw(400, 'This language is not allowed in the contest')
+      throw new HTTPException(400, { message: 'This language is not allowed in the contest' })
     }
   } else {
-    problemState = await loadProblemState(ctx, pid)
+    problemState = await loadProblemState(c, pid)
     if (!problemState) {
-      ctx.throw(404, 'Problem not found or access denied')
+      throw new HTTPException(404, { message: 'Problem not found or access denied' })
     }
   }
 
@@ -171,36 +172,36 @@ const create = async (ctx: Context) => {
     }
 
     await redis.rpush('judger:task', JSON.stringify(submission))
-    ctx.auditLog.info(`<Submission:${sid}> of <Problem:${pid}>${mid > 0 ? ` in <Contest:${mid}>` : ''} created by <User:${uid}>`)
+    c.get('auditLog').info(`<Submission:${sid}> of <Problem:${pid}>${mid > 0 ? ` in <Contest:${mid}>` : ''} created by <User:${uid}>`)
 
     const result = SolutionSubmitResultSchema.encode({ solution: sid })
-    return createEnvelopedResponse(ctx, result)
+    return createEnvelopedResponse(c, result)
   } catch (e: any) {
-    ctx.throw(400, e.message)
+    throw new HTTPException(400, { message: e.message })
   }
 }
 
-async function updateSolution (ctx: Context) {
-  const profile = await loadProfile(ctx)
-  const opt = toObjectRecord(ctx.request.body)
+async function updateSolution (c: AppContext) {
+  const profile = await loadProfile(c)
+  const opt = toObjectRecord(await c.req.json().catch(() => ({})))
 
-  const sid = Number(ctx.params.sid)
+  const sid = Number(c.req.param('sid'))
   if (!Number.isInteger(sid) || sid <= 0) {
-    return createErrorResponse(ctx, ErrorCode.BadRequest, 'Invalid submission id')
+    return createErrorResponse(c, ErrorCode.BadRequest, 'Invalid submission id')
   }
   const updatedJudge = Number(opt.judge)
   if (updatedJudge !== JudgeStatus.RejudgePending && updatedJudge !== JudgeStatus.Skipped) {
-    return createErrorResponse(ctx, ErrorCode.BadRequest, 'Invalid judge status, only support RejudgePending and Skipped')
+    return createErrorResponse(c, ErrorCode.BadRequest, 'Invalid judge status, only support RejudgePending and Skipped')
   }
 
   const solution = await Solution.findOne({ sid })
   if (!solution) {
-    return createErrorResponse(ctx, ErrorCode.NotFound)
+    return createErrorResponse(c, ErrorCode.NotFound)
   }
   const pid = solution.pid
   const problem = await Problem.findOne({ pid })
   if (!problem) {
-    return createErrorResponse(ctx, ErrorCode.NotFound, 'Problem of the solution not found')
+    return createErrorResponse(c, ErrorCode.NotFound, 'Problem of the solution not found')
   }
 
   try {
@@ -214,12 +215,12 @@ async function updateSolution (ctx: Context) {
 
     await solution.save()
   } catch (err) {
-    ctx.auditLog.error('Failed to update solution', err)
-    return createErrorResponse(ctx, ErrorCode.InternalServerError)
+    c.get('auditLog').error('Failed to update solution', err)
+    return createErrorResponse(c, ErrorCode.InternalServerError)
   }
 
   if (updatedJudge !== JudgeStatus.RejudgePending) {
-    return createEnvelopedResponse(ctx, solution)
+    return createEnvelopedResponse(c, solution)
   }
 
   try {
@@ -249,23 +250,23 @@ async function updateSolution (ctx: Context) {
     }
 
     await redis.rpush('judger:task', JSON.stringify(submission))
-    ctx.auditLog.info(`<Submission:${sid}> rejudged by <User:${profile.uid}>`)
+    c.get('auditLog').info(`<Submission:${sid}> rejudged by <User:${profile.uid}>`)
   } catch (err) {
-    ctx.auditLog.error('Failed to push solution to judger queue', err)
-    return createErrorResponse(ctx, ErrorCode.InternalServerError)
+    c.get('auditLog').error('Failed to push solution to judger queue', err)
+    return createErrorResponse(c, ErrorCode.InternalServerError)
   }
 
-  return createEnvelopedResponse(ctx, solution)
+  return createEnvelopedResponse(c, solution)
 }
 
-function registerSolutionHandlers (router: Router) {
-  const solutionRouter = new Router({ prefix: '/status' })
+function registerSolutionHandlers (app: Hono<HonoEnv>) {
+  const solutionApp = new Hono<HonoEnv>()
 
-  solutionRouter.get('/:sid', loginRequire, findOne)
-  solutionRouter.put('/:sid', rootRequire, updateSolution)
-  solutionRouter.post('/', loginRequire, solutionCreateLimit, create)
+  solutionApp.get('/:sid', loginRequire, findOne)
+  solutionApp.put('/:sid', rootRequire, updateSolution)
+  solutionApp.post('/', loginRequire, solutionCreateLimit, create)
 
-  router.use(solutionRouter.routes(), solutionRouter.allowedMethods())
+  app.route('/status', solutionApp)
 }
 
 export default registerSolutionHandlers

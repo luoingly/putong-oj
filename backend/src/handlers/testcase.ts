@@ -1,12 +1,11 @@
-import type { Context } from 'koa'
+import type { AppContext, HonoEnv } from '../types/koa'
 import { Buffer } from 'node:buffer'
 import path from 'node:path'
-import Router from '@koa/router'
+import { Hono } from 'hono'
+import { HTTPException } from 'hono/http-exception'
 import { ProblemTestcaseListQueryResultSchema } from '@putongoj/shared'
 import { BlobWriter, TextReader, ZipWriter } from '@zip.js/zip.js'
 import fse from 'fs-extra'
-import send from 'koa-send'
-import remove from 'lodash/remove'
 import { v4 as uuid, validate } from 'uuid'
 import { loadProfile, loginRequire } from '../middlewares/authn'
 import { dataExportLimit } from '../middlewares/ratelimit'
@@ -15,11 +14,11 @@ import courseService from '../services/course'
 import { createEnvelopedResponse, toObjectRecord } from '../utils'
 import { ERR_INVALID_ID, ERR_PERM_DENIED } from '../utils/constants'
 
-export async function findTestcases (ctx: Context) {
-  const problem = await loadProblemOrThrow(ctx)
-  const profile = await loadProfile(ctx)
+export async function findTestcases (c: AppContext) {
+  const problem = await loadProblemOrThrow(c)
+  const profile = await loadProfile(c)
   if (!(profile.isAdmin || (problem.owner && problem.owner.equals(profile._id)))) {
-    ctx.throw(...ERR_PERM_DENIED)
+    throw new HTTPException(ERR_PERM_DENIED[0] as 403, { message: ERR_PERM_DENIED[1] as string })
   }
 
   const { pid } = problem
@@ -34,12 +33,12 @@ export async function findTestcases (ctx: Context) {
   }
 
   const result = ProblemTestcaseListQueryResultSchema.parse(meta.testcases)
-  return createEnvelopedResponse(ctx, result)
+  return createEnvelopedResponse(c, result)
 }
 
-export async function exportTestcases (ctx: Context) {
-  const problem = await loadProblemOrThrow(ctx)
-  const profile = await loadProfile(ctx)
+export async function exportTestcases (c: AppContext) {
+  const problem = await loadProblemOrThrow(c)
+  const profile = await loadProfile(c)
   if (!(
     profile.isAdmin
     || (problem.owner && problem.owner.equals(profile._id))
@@ -47,26 +46,26 @@ export async function exportTestcases (ctx: Context) {
       profile._id, problem._id, 'viewTestcase',
     )
   )) {
-    ctx.throw(...ERR_PERM_DENIED)
+    throw new HTTPException(ERR_PERM_DENIED[0] as 403, { message: ERR_PERM_DENIED[1] as string })
   }
 
   const { pid } = problem
   const testDir = path.resolve(__dirname, `../../data/${pid}`)
 
   if (!fse.existsSync(testDir)) {
-    ctx.throw(404, 'No testcases found for this problem')
+    throw new HTTPException(404, { message: 'No testcases found for this problem' })
   }
 
   const metaFile = path.resolve(testDir, 'meta.json')
   if (!fse.existsSync(metaFile)) {
-    ctx.throw(404, 'No testcases found for this problem')
+    throw new HTTPException(404, { message: 'No testcases found for this problem' })
   }
 
   const meta = await fse.readJson(metaFile)
   const testcases = meta.testcases || []
 
   if (testcases.length === 0) {
-    ctx.throw(404, 'No testcases found for this problem')
+    throw new HTTPException(404, { message: 'No testcases found for this problem' })
   }
 
   try {
@@ -91,34 +90,36 @@ export async function exportTestcases (ctx: Context) {
     const zipBlob = await zipWriter.close()
     const filename = `PutongOJ-testcases-problem-${pid}-${Date.now()}.zip`
 
-    ctx.set('Content-Type', 'application/zip')
-    ctx.set('Content-Disposition', `attachment; filename="${filename}"`)
-    ctx.set('Cache-Control', 'no-cache')
-
-    ctx.body = Buffer.from(await zipBlob.arrayBuffer())
-    ctx.auditLog.info(`Testcases for <Problem:${pid}> exported by user <User:${profile.uid}>`)
+    c.get('auditLog').info(`Testcases for <Problem:${pid}> exported by user <User:${profile.uid}>`)
+    return new Response(await zipBlob.arrayBuffer(), {
+      headers: {
+        'Content-Type': 'application/zip',
+        'Content-Disposition': `attachment; filename="${filename}"`,
+        'Cache-Control': 'no-cache',
+      },
+    })
   } catch (error) {
-    ctx.auditLog.error(`Failed to export testcases for <Problem:${pid}>:`, error)
-    ctx.throw(500, 'Failed to export testcases')
+    c.get('auditLog').error(`Failed to export testcases for <Problem:${pid}>:`, error)
+    throw new HTTPException(500, { message: 'Failed to export testcases' })
   }
 }
 
-export async function createTestcase (ctx: Context) {
-  const problem = await loadProblemOrThrow(ctx)
-  const profile = await loadProfile(ctx)
+export async function createTestcase (c: AppContext) {
+  const problem = await loadProblemOrThrow(c)
+  const profile = await loadProfile(c)
   if (!(profile.isAdmin || (problem.owner && problem.owner.equals(profile._id)))) {
-    ctx.throw(...ERR_PERM_DENIED)
+    throw new HTTPException(ERR_PERM_DENIED[0] as 403, { message: ERR_PERM_DENIED[1] as string })
   }
 
   const { pid } = problem
   const { uid } = profile
 
-  const body = toObjectRecord(ctx.request.body)
+  const body = toObjectRecord(await c.req.json().catch(() => ({})))
   const testin = String(body.in || '')
   const testout = String(body.out || '')
 
   if (!testin && !testout) {
-    ctx.throw(400, 'Cannot create testcase without both input and output')
+    throw new HTTPException(400, { message: 'Cannot create testcase without both input and output' })
   }
 
   /**
@@ -141,24 +142,24 @@ export async function createTestcase (ctx: Context) {
     fse.outputFile(path.resolve(testDir, `${id}.out`), testout),
     fse.outputJson(path.resolve(testDir, 'meta.json'), meta, { spaces: 2 }),
   ])
-  ctx.auditLog.info(`<Testcase:${id}> for <Problem:${pid}> created by <User:${uid}>`)
+  c.get('auditLog').info(`<Testcase:${id}> for <Problem:${pid}> created by <User:${uid}>`)
 
   const result = ProblemTestcaseListQueryResultSchema.parse(meta.testcases)
-  return createEnvelopedResponse(ctx, result)
+  return createEnvelopedResponse(c, result)
 }
 
-export async function removeTestcase (ctx: Context) {
-  const problem = await loadProblemOrThrow(ctx)
-  const profile = await loadProfile(ctx)
+export async function removeTestcase (c: AppContext) {
+  const problem = await loadProblemOrThrow(c)
+  const profile = await loadProfile(c)
   if (!(profile.isAdmin || (problem.owner && problem.owner.equals(profile._id)))) {
-    ctx.throw(...ERR_PERM_DENIED)
+    throw new HTTPException(ERR_PERM_DENIED[0] as 403, { message: ERR_PERM_DENIED[1] as string })
   }
 
   const { pid } = problem
   const { uid } = profile
-  const uuid = String(ctx.params.uuid || '').trim()
-  if (!validate(uuid) || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(uuid)) {
-    ctx.throw(...ERR_INVALID_ID)
+  const uuidParam = String(c.req.param('uuid') || '').trim()
+  if (!validate(uuidParam) || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(uuidParam)) {
+    throw new HTTPException(ERR_INVALID_ID[0] as number as any, { message: ERR_INVALID_ID[1] as string })
   }
 
   /**
@@ -170,17 +171,17 @@ export async function removeTestcase (ctx: Context) {
   const testDir = path.resolve(__dirname, `../../data/${pid}`)
   const meta = await fse.readJson(path.resolve(testDir, 'meta.json'))
 
-  remove(meta.testcases, item => item.uuid === uuid)
+  meta.testcases = meta.testcases.filter((item: any) => item.uuid !== uuidParam)
   await fse.outputJson(path.resolve(testDir, 'meta.json'), meta, { spaces: 2 })
-  ctx.auditLog.info(`<Testcase:${uuid}> for <Problem:${pid}> removed by <User:${uid}>`)
+  c.get('auditLog').info(`<Testcase:${uuidParam}> for <Problem:${pid}> removed by <User:${uid}>`)
 
   const result = ProblemTestcaseListQueryResultSchema.parse(meta.testcases)
-  return createEnvelopedResponse(ctx, result)
+  return createEnvelopedResponse(c, result)
 }
 
-export async function getTestcase (ctx: Context) {
-  const problem = await loadProblemOrThrow(ctx)
-  const profile = await loadProfile(ctx)
+export async function getTestcase (c: AppContext) {
+  const problem = await loadProblemOrThrow(c)
+  const profile = await loadProfile(c)
   if (!(
     profile.isAdmin
     || (problem.owner && problem.owner.equals(profile._id))
@@ -188,37 +189,42 @@ export async function getTestcase (ctx: Context) {
       profile._id, problem._id, 'viewTestcase',
     )
   )) {
-    ctx.throw(...ERR_PERM_DENIED)
+    throw new HTTPException(ERR_PERM_DENIED[0] as 403, { message: ERR_PERM_DENIED[1] as string })
   }
 
   const { pid } = problem
-  const uuid = String(ctx.params.uuid || '').trim()
-  if (!validate(uuid) || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(uuid)) {
-    ctx.throw(...ERR_INVALID_ID)
+  const uuidParam = String(c.req.param('uuid') || '').trim()
+  if (!validate(uuidParam) || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(uuidParam)) {
+    throw new HTTPException(ERR_INVALID_ID[0] as number as any, { message: ERR_INVALID_ID[1] as string })
   }
-  const type = String(ctx.params.type || '').trim()
+  const type = String(c.req.param('type') || '').trim()
   if (type !== 'in' && type !== 'out') {
-    ctx.throw(400, 'Invalid type')
+    throw new HTTPException(400, { message: 'Invalid type' })
   }
 
   const testDir = path.resolve(__dirname, `../../data/${pid}`)
-  if (!fse.existsSync(path.resolve(testDir, `${uuid}.${type}`))) {
-    ctx.throw(400, 'No such a testcase')
+  const filePath = path.resolve(testDir, `${uuidParam}.${type}`)
+  if (!fse.existsSync(filePath)) {
+    throw new HTTPException(400, { message: 'No such a testcase' })
   }
-  ctx.type = 'text/plain; charset=utf-8'
-  await send(ctx, `${uuid}.${type}`, { root: testDir })
+  const content = await fse.readFile(filePath)
+  return new Response(content, {
+    headers: {
+      'Content-Type': 'text/plain; charset=utf-8',
+    },
+  })
 }
 
-function registerTestcaseHandlers (router: Router) {
-  const testcaseRouter = new Router({ prefix: '/problem/:pid/testcases' })
+function registerTestcaseHandlers (app: Hono<HonoEnv>) {
+  const testcaseApp = new Hono<HonoEnv>()
 
-  testcaseRouter.get('/', loginRequire, findTestcases)
-  testcaseRouter.post('/', loginRequire, createTestcase)
-  testcaseRouter.get('/export', loginRequire, dataExportLimit, exportTestcases)
-  testcaseRouter.get('/:uuid.:type', loginRequire, getTestcase)
-  testcaseRouter.del('/:uuid', loginRequire, removeTestcase)
+  testcaseApp.get('/', loginRequire, findTestcases)
+  testcaseApp.post('/', loginRequire, createTestcase)
+  testcaseApp.get('/export', loginRequire, dataExportLimit, exportTestcases)
+  testcaseApp.get('/:uuid{[0-9a-f-]+}.:type', loginRequire, getTestcase)
+  testcaseApp.delete('/:uuid', loginRequire, removeTestcase)
 
-  router.use(testcaseRouter.routes(), testcaseRouter.allowedMethods())
+  app.route('/problem/:pid/testcases', testcaseApp)
 }
 
 export default registerTestcaseHandlers

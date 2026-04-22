@@ -1,4 +1,5 @@
-import Router from '@koa/router'
+import type { HonoEnv } from './types/koa'
+import { Hono } from 'hono'
 
 import registerAccountHandlers from './handlers/account'
 import registerAdminHandlers from './handlers/admin'
@@ -16,22 +17,22 @@ import registerTestcaseHandlers from './handlers/testcase'
 import registerUserHandlers from './handlers/user'
 import registerUtilsHandlers from './handlers/utils'
 
-const router = new Router({ prefix: '/api' })
+const apiApp = new Hono<HonoEnv>()
 
-registerAccountHandlers(router)
-registerAdminHandlers(router)
-registerContestHandlers(router)
-registerCourseHandlers(router)
-registerDiscussionHandlers(router)
-registerFileHandlers(router)
-registerGroupHandlers(router)
-registerPostHandlers(router)
-registerOAuthHandlers(router)
-registerProblemHandlers(router)
-registerSolutionHandlers(router)
-registerTestcaseHandlers(router)
-registerTagHandlers(router)
-registerUserHandlers(router)
-registerUtilsHandlers(router)
+registerAccountHandlers(apiApp)
+registerAdminHandlers(apiApp)
+registerContestHandlers(apiApp)
+registerCourseHandlers(apiApp)
+registerDiscussionHandlers(apiApp)
+registerFileHandlers(apiApp)
+registerPostHandlers(apiApp)
+registerOAuthHandlers(apiApp)
+registerProblemHandlers(apiApp)
+registerSolutionHandlers(apiApp)
+registerTagHandlers(apiApp)
+registerGroupHandlers(apiApp)
+registerTestcaseHandlers(apiApp)
+registerUserHandlers(apiApp)
+registerUtilsHandlers(apiApp)
 
-export default router
+export default apiApp

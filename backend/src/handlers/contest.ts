@@ -1,8 +1,9 @@
 import type { ContestModel } from '@putongoj/shared'
-import type { Context } from 'koa'
+import type { AppContext, HonoEnv } from '../types/koa'
 import type { Types } from 'mongoose'
 import type { DiscussionQueryFilters } from '../services/discussion'
-import Router from '@koa/router'
+import { Hono } from 'hono'
+import { HTTPException } from 'hono/http-exception'
 import {
   ContestConfigEditPayloadSchema,
   ContestConfigQueryResultSchema,
@@ -47,21 +48,21 @@ import {
 } from '../utils'
 import { ERR_PERM_DENIED } from '../utils/constants'
 
-async function findContests (ctx: Context) {
-  const query = ContestListQuerySchema.safeParse(ctx.request.query)
+async function findContests (c: AppContext) {
+  const query = ContestListQuerySchema.safeParse(c.req.query())
   if (!query.success) {
-    return createZodErrorResponse(ctx, query.error)
+    return createZodErrorResponse(c, query.error)
   }
 
-  const { profile } = ctx.state
+  const profile = c.get('profile')
   const { page, pageSize, sort, sortBy, title, course: courseId } = query.data
 
   let showHidden: boolean = !!profile?.isAdmin
   let courseDocId: Types.ObjectId | undefined
   if (courseId) {
-    const { course, role } = await loadCourseStateOrThrow(ctx, courseId)
+    const { course, role } = await loadCourseStateOrThrow(c, courseId)
     if (!role.basic) {
-      return ctx.throw(...ERR_PERM_DENIED)
+      throw new HTTPException(ERR_PERM_DENIED[0] as 403, { message: ERR_PERM_DENIED[1] as string })
     }
     if (role.manageContest) {
       showHidden = true
@@ -73,17 +74,17 @@ async function findContests (ctx: Context) {
     { page, pageSize, sort, sortBy },
     { title, course: courseDocId }, showHidden)
   const result = ContestListQueryResultSchema.encode(contests)
-  return createEnvelopedResponse(ctx, result)
+  return createEnvelopedResponse(c, result)
 }
 
-async function getParticipation (ctx: Context) {
-  const state = await loadContestState(ctx)
+async function getParticipation (c: AppContext) {
+  const state = await loadContestState(c)
   if (!state) {
-    return createErrorResponse(ctx, ErrorCode.NotFound, 'Contest not found or access denied')
+    return createErrorResponse(c, ErrorCode.NotFound, 'Contest not found or access denied')
   }
 
   const { contest, participation, isJury, isIpBlocked, hasStarted } = state
-  const profile = await loadProfile(ctx)
+  const profile = await loadProfile(c)
   let canParticipate: boolean = false
   let canParticipateByPassword: boolean = false
 
@@ -106,17 +107,17 @@ async function getParticipation (ctx: Context) {
   const result = ContestParticipationQueryResultSchema.encode({
     isJury, participation, canParticipate, canParticipateByPassword, isIpBlocked, hasStarted,
   })
-  return createEnvelopedResponse(ctx, result)
+  return createEnvelopedResponse(c, result)
 }
 
-async function findParticipants (ctx: Context) {
-  const query = ContestParticipantListQuerySchema.safeParse(ctx.request.query)
+async function findParticipants (c: AppContext) {
+  const query = ContestParticipantListQuerySchema.safeParse(c.req.query())
   if (!query.success) {
-    return createZodErrorResponse(ctx, query.error)
+    return createZodErrorResponse(c, query.error)
   }
-  const state = await loadContestState(ctx)
+  const state = await loadContestState(c)
   if (!state || !state.isJury) {
-    return createErrorResponse(ctx, ErrorCode.NotFound, 'Contest not found or access denied')
+    return createErrorResponse(c, ErrorCode.NotFound, 'Contest not found or access denied')
   }
 
   const participants = await contestService.findParticipants(
@@ -124,56 +125,58 @@ async function findParticipants (ctx: Context) {
     { user: query.data.user, status: query.data.status },
   )
   const result = ContestParticipantListQueryResultSchema.encode(participants)
-  return createEnvelopedResponse(ctx, result)
+  return createEnvelopedResponse(c, result)
 }
 
-async function updateParticipantStatus (ctx: Context) {
-  const payload = ContestParticipantUpdatePayloadSchema.safeParse(ctx.request.body)
+async function updateParticipantStatus (c: AppContext) {
+  const body = await c.req.json().catch(() => ({}))
+  const payload = ContestParticipantUpdatePayloadSchema.safeParse(body)
   if (!payload.success) {
-    return createZodErrorResponse(ctx, payload.error)
+    return createZodErrorResponse(c, payload.error)
   }
-  const state = await loadContestState(ctx)
+  const state = await loadContestState(c)
   if (!state || !state.isJury) {
-    return createErrorResponse(ctx, ErrorCode.NotFound, 'Contest not found or access denied')
+    return createErrorResponse(c, ErrorCode.NotFound, 'Contest not found or access denied')
   }
 
-  const profile = await loadProfile(ctx)
-  const user = await getUser(ctx.params.username)
+  const profile = await loadProfile(c)
+  const user = await getUser(c.req.param('username'))
   if (!user) {
-    return createErrorResponse(ctx, ErrorCode.NotFound, 'User not found')
+    return createErrorResponse(c, ErrorCode.NotFound, 'User not found')
   }
 
   const updated = await contestService.updateParticipantStatus(
     user._id, state.contest._id, payload.data.status,
   )
   if (!updated) {
-    return createErrorResponse(ctx, ErrorCode.NotFound, 'Participation not found')
+    return createErrorResponse(c, ErrorCode.NotFound, 'Participation not found')
   }
 
-  ctx.auditLog.info(
+  c.get('auditLog').info(
     `<User:${profile.uid}> updated <User:${user.uid}> participation in <Contest:${state.contest.contestId}> to <ParticipationStatus:${payload.data.status}>`,
   )
-  return createEnvelopedResponse(ctx, null)
+  return createEnvelopedResponse(c, null)
 }
 
-async function participateContest (ctx: Context) {
-  const payload = ContestParticipatePayloadSchema.safeParse(ctx.request.body)
+async function participateContest (c: AppContext) {
+  const body = await c.req.json().catch(() => ({}))
+  const payload = ContestParticipatePayloadSchema.safeParse(body)
   if (!payload.success) {
-    return createZodErrorResponse(ctx, payload.error)
+    return createZodErrorResponse(c, payload.error)
   }
-  const state = await loadContestState(ctx)
+  const state = await loadContestState(c)
   if (!state) {
-    return createErrorResponse(ctx, ErrorCode.NotFound, 'Contest not found or access denied')
+    return createErrorResponse(c, ErrorCode.NotFound, 'Contest not found or access denied')
   }
-  const profile = await loadProfile(ctx)
+  const profile = await loadProfile(c)
   const { contest, participation, isJury } = state
 
   if (state.isIpBlocked) {
-    return createErrorResponse(ctx, ErrorCode.Forbidden, 'Your IP address is not in the whitelist for this contest')
+    return createErrorResponse(c, ErrorCode.Forbidden, 'Your IP address is not in the whitelist for this contest')
   }
 
   if (participation !== ParticipationStatus.NotApplied) {
-    return createErrorResponse(ctx, ErrorCode.BadRequest, 'You have already participated in this contest')
+    return createErrorResponse(c, ErrorCode.BadRequest, 'You have already participated in this contest')
   }
 
   let canParticipate: boolean = false
@@ -186,21 +189,21 @@ async function participateContest (ctx: Context) {
     }
   }
   if (!canParticipate) {
-    return createErrorResponse(ctx, ErrorCode.Forbidden, 'You cannot participate in this contest')
+    return createErrorResponse(c, ErrorCode.Forbidden, 'You cannot participate in this contest')
   }
 
   await contestService.updateParticipation(
     profile._id, contest._id, ParticipationStatus.Approved)
-  ctx.auditLog.info(`<User:${profile.uid}> participated in contest <Contest:${contest.contestId}>`)
-  return createEnvelopedResponse(ctx, null)
+  c.get('auditLog').info(`<User:${profile.uid}> participated in contest <Contest:${contest.contestId}>`)
+  return createEnvelopedResponse(c, null)
 }
 
-async function getContest (ctx: Context) {
-  const state = await loadContestState(ctx)
+async function getContest (c: AppContext) {
+  const state = await loadContestState(c)
   if (!state || !state.accessible) {
-    return createErrorResponse(ctx, ErrorCode.NotFound, 'Contest not found or access denied')
+    return createErrorResponse(c, ErrorCode.NotFound, 'Contest not found or access denied')
   }
-  const profile = await loadProfile(ctx)
+  const profile = await loadProfile(c)
   const { contest, isJury } = state
 
   const [ problemsBasic, attempted, solved ] = await Promise.all([
@@ -221,7 +224,7 @@ async function getContest (ctx: Context) {
 
   let course: { courseId: number, name: string } | null = null
   if (contest.course) {
-    const courseState = await loadCourseStateById(ctx, contest.course)
+    const courseState = await loadCourseStateById(c, contest.course)
     if (courseState) {
       const { courseId, name } = courseState.course
       course = { courseId, name }
@@ -230,13 +233,13 @@ async function getContest (ctx: Context) {
   const result = ContestDetailQueryResultSchema.encode({
     ...contest, isJury, problems, course,
   })
-  return createEnvelopedResponse(ctx, result)
+  return createEnvelopedResponse(c, result)
 }
 
-async function getConfig (ctx: Context) {
-  const state = await loadContestState(ctx)
+async function getConfig (c: AppContext) {
+  const state = await loadContestState(c)
   if (!state || !state.isJury) {
-    return createErrorResponse(ctx, ErrorCode.NotFound, 'Contest not found or access denied')
+    return createErrorResponse(c, ErrorCode.NotFound, 'Contest not found or access denied')
   }
   const { contest } = state
 
@@ -276,7 +279,7 @@ async function getConfig (ctx: Context) {
 
   let course: { courseId: number, name: string } | null = null
   if (contest.course) {
-    const courseState = await loadCourseStateById(ctx, contest.course)
+    const courseState = await loadCourseStateById(c, contest.course)
     if (courseState) {
       const { courseId, name } = courseState.course
       course = { courseId, name }
@@ -293,19 +296,20 @@ async function getConfig (ctx: Context) {
     problems,
     course,
   })
-  return createEnvelopedResponse(ctx, result)
+  return createEnvelopedResponse(c, result)
 }
 
-async function updateConfig (ctx: Context) {
-  const payload = ContestConfigEditPayloadSchema.safeParse(ctx.request.body)
+async function updateConfig (c: AppContext) {
+  const body = await c.req.json().catch(() => ({}))
+  const payload = ContestConfigEditPayloadSchema.safeParse(body)
   if (!payload.success) {
-    return createZodErrorResponse(ctx, payload.error)
+    return createZodErrorResponse(c, payload.error)
   }
-  const state = await loadContestState(ctx)
+  const state = await loadContestState(c)
   if (!state || !state.isJury) {
-    return createErrorResponse(ctx, ErrorCode.NotFound, 'Contest not found or access denied')
+    return createErrorResponse(c, ErrorCode.NotFound, 'Contest not found or access denied')
   }
-  const profile = await loadProfile(ctx)
+  const profile = await loadProfile(c)
   const { contest } = state
 
   let allowedUsers: Types.ObjectId[] | undefined
@@ -338,7 +342,7 @@ async function updateConfig (ctx: Context) {
     if (payload.data.course === null) {
       course = null
     } else {
-      const courseDoc = await loadCourseStateOrThrow(ctx, payload.data.course)
+      const courseDoc = await loadCourseStateOrThrow(c, payload.data.course)
       course = courseDoc.course._id
     }
   }
@@ -352,7 +356,7 @@ async function updateConfig (ctx: Context) {
   }
 
   await contestService.updateContest(contest.contestId, data)
-  ctx.auditLog.info(`<Contest:${contest.contestId}> config updated`)
+  c.get('auditLog').info(`<Contest:${contest.contestId}> config updated`)
 
   if (problems !== undefined) {
     await Promise.all([
@@ -361,29 +365,29 @@ async function updateConfig (ctx: Context) {
     ])
   }
 
-  return createEnvelopedResponse(ctx, null)
+  return createEnvelopedResponse(c, null)
 }
 
-export async function getRanklist (ctx: Context) {
-  const state = await loadContestState(ctx)
+export async function getRanklist (c: AppContext) {
+  const state = await loadContestState(c)
   if (!state || !state.accessible) {
-    return createErrorResponse(ctx, ErrorCode.NotFound, 'Contest not found or access denied')
+    return createErrorResponse(c, ErrorCode.NotFound, 'Contest not found or access denied')
   }
   const { contest, isJury } = state
 
   const ranklist = await contestService.getRanklist(contest._id, isJury)
   const result = ContestRanklistQueryResultSchema.encode(ranklist)
-  return createEnvelopedResponse(ctx, result)
+  return createEnvelopedResponse(c, result)
 }
 
-export async function findSolutions (ctx: Context) {
-  const query = ContestSolutionListQuerySchema.safeParse(ctx.request.query)
+export async function findSolutions (c: AppContext) {
+  const query = ContestSolutionListQuerySchema.safeParse(c.req.query())
   if (!query.success) {
-    return createZodErrorResponse(ctx, query.error)
+    return createZodErrorResponse(c, query.error)
   }
-  const state = await loadContestState(ctx)
+  const state = await loadContestState(c)
   if (!state || !state.isJury) {
-    return createErrorResponse(ctx, ErrorCode.NotFound, 'Contest not found or access denied')
+    return createErrorResponse(c, ErrorCode.NotFound, 'Contest not found or access denied')
   }
   const { contest } = state
   const solutions = await solutionService.findSolutions({
@@ -391,17 +395,17 @@ export async function findSolutions (ctx: Context) {
     contest: contest.contestId,
   })
   const result = ContestSolutionListQueryResultSchema.encode(solutions)
-  return createEnvelopedResponse(ctx, result)
+  return createEnvelopedResponse(c, result)
 }
 
-export async function exportSolutions (ctx: Context) {
-  const query = ContestSolutionListExportQuerySchema.safeParse(ctx.request.query)
+export async function exportSolutions (c: AppContext) {
+  const query = ContestSolutionListExportQuerySchema.safeParse(c.req.query())
   if (!query.success) {
-    return createZodErrorResponse(ctx, query.error)
+    return createZodErrorResponse(c, query.error)
   }
-  const state = await loadContestState(ctx)
+  const state = await loadContestState(c)
   if (!state || !state.isJury) {
-    return createErrorResponse(ctx, ErrorCode.NotFound, 'Contest not found or access denied')
+    return createErrorResponse(c, ErrorCode.NotFound, 'Contest not found or access denied')
   }
   const { contest } = state
   const solutions = await solutionService.exportSolutions({
@@ -409,21 +413,21 @@ export async function exportSolutions (ctx: Context) {
     contest: contest.contestId,
   })
   const result = ContestSolutionListExportQueryResultSchema.encode(solutions)
-  return createEnvelopedResponse(ctx, result)
+  return createEnvelopedResponse(c, result)
 }
 
-export async function findContestDiscussions (ctx: Context) {
-  const query = DiscussionListQuerySchema.safeParse(ctx.request.query)
+export async function findContestDiscussions (c: AppContext) {
+  const query = DiscussionListQuerySchema.safeParse(c.req.query())
   if (!query.success) {
-    return createZodErrorResponse(ctx, query.error)
+    return createZodErrorResponse(c, query.error)
   }
-  const state = await loadContestState(ctx)
+  const state = await loadContestState(c)
   if (!state || !state.accessible) {
-    return createErrorResponse(ctx, ErrorCode.NotFound, 'Contest not found or access denied')
+    return createErrorResponse(c, ErrorCode.NotFound, 'Contest not found or access denied')
   }
   const { contest } = state
 
-  const profile = await loadProfile(ctx)
+  const profile = await loadProfile(c)
   const { page, pageSize, sort, sortBy, type, author } = query.data
 
   const queryFilter: DiscussionQueryFilters = {}
@@ -461,66 +465,67 @@ export async function findContestDiscussions (ctx: Context) {
       ...discussion, contest: { contestId: contest.contestId },
     })),
   })
-  return createEnvelopedResponse(ctx, result)
+  return createEnvelopedResponse(c, result)
 }
 
-export async function createContest (ctx: Context) {
-  const payload = ContestCreatePayloadSchema.safeParse(ctx.request.body)
+export async function createContest (c: AppContext) {
+  const body = await c.req.json().catch(() => ({}))
+  const payload = ContestCreatePayloadSchema.safeParse(body)
   if (!payload.success) {
-    return createZodErrorResponse(ctx, payload.error)
+    return createZodErrorResponse(c, payload.error)
   }
 
   const opt = payload.data
-  const profile = await loadProfile(ctx)
+  const profile = await loadProfile(c)
   const hasPermission = async (): Promise<boolean> => {
     if (profile.isAdmin) {
       return true
     }
     if (opt.course) {
-      const { role } = await loadCourseStateOrThrow(ctx, opt.course)
+      const { role } = await loadCourseStateOrThrow(c, opt.course)
       return role.manageContest
     }
     return false
   }
   if (!await hasPermission()) {
-    return createErrorResponse(ctx, ErrorCode.Forbidden, 'Permission denied to create contest')
+    return createErrorResponse(c, ErrorCode.Forbidden, 'Permission denied to create contest')
   }
 
   let course: Types.ObjectId | null = null
   if (opt.course) {
-    const { course: { _id } } = await loadCourseStateOrThrow(ctx, opt.course)
+    const { course: { _id } } = await loadCourseStateOrThrow(c, opt.course)
     course = _id
   }
 
   try {
     const contest = await contestService.createContest({ ...opt, course })
-    ctx.auditLog.info(`<Contest:${contest.contestId}> created by <User:${profile.uid}>`)
-    return createEnvelopedResponse(ctx, { contestId: contest.contestId })
+    c.get('auditLog').info(`<Contest:${contest.contestId}> created by <User:${profile.uid}>`)
+    return createEnvelopedResponse(c, { contestId: contest.contestId })
   } catch (e: any) {
-    return createErrorResponse(ctx, ErrorCode.BadRequest, `Failed to create contest: ${e.message}`)
+    return createErrorResponse(c, ErrorCode.BadRequest, `Failed to create contest: ${e.message}`)
   }
 }
 
-function registerContestHandlers (router: Router) {
-  const contestRouter = new Router({ prefix: '/contests' })
+function registerContestHandlers (app: Hono<HonoEnv>) {
+  const contestApp = new Hono<HonoEnv>()
 
-  contestRouter.get('/', findContests)
-  contestRouter.get('/:contestId', loginRequire, getContest)
-  contestRouter.get('/:contestId/participation', loginRequire, getParticipation)
-  contestRouter.post('/:contestId/participation', loginRequire, participateContest)
-  contestRouter.get('/:contestId/participants', loginRequire, findParticipants)
-  contestRouter.put('/:contestId/participants/:username', loginRequire, updateParticipantStatus)
-  contestRouter.get('/:contestId/ranklist', loginRequire, getRanklist)
-  contestRouter.post('/', loginRequire, createContest)
-  contestRouter.get('/:contestId/configs', loginRequire, getConfig)
-  contestRouter.put('/:contestId/configs', loginRequire, updateConfig)
+  contestApp.get('/', findContests)
+  contestApp.get('/:contestId', loginRequire, getContest)
+  contestApp.get('/:contestId/participation', loginRequire, getParticipation)
+  contestApp.post('/:contestId/participation', loginRequire, participateContest)
+  contestApp.get('/:contestId/participants', loginRequire, findParticipants)
+  contestApp.put('/:contestId/participants/:username', loginRequire, updateParticipantStatus)
+  contestApp.get('/:contestId/ranklist', loginRequire, getRanklist)
+  contestApp.post('/', loginRequire, createContest)
+  contestApp.get('/:contestId/configs', loginRequire, getConfig)
+  contestApp.put('/:contestId/configs', loginRequire, updateConfig)
 
-  contestRouter.get('/:contestId/solutions', loginRequire, findSolutions)
-  contestRouter.get('/:contestId/solutions/export', loginRequire, dataExportLimit, exportSolutions)
+  contestApp.get('/:contestId/solutions', loginRequire, findSolutions)
+  contestApp.get('/:contestId/solutions/export', loginRequire, dataExportLimit, exportSolutions)
 
-  contestRouter.get('/:contestId/discussions', loginRequire, findContestDiscussions)
+  contestApp.get('/:contestId/discussions', loginRequire, findContestDiscussions)
 
-  router.use(contestRouter.routes(), contestRouter.allowedMethods())
+  app.route('/contests', contestApp)
 }
 
 export default registerContestHandlers

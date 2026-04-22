@@ -1,10 +1,11 @@
 import type { Paginated } from '@putongoj/shared'
-import type { Context } from 'koa'
+import type { AppContext, HonoEnv } from '../types/koa'
 import type { Types } from 'mongoose'
 import type { DiscussionQueryFilters } from '../services/discussion'
 import type { WithId } from '../types'
 import type { CourseEntity, ProblemEntity, ProblemEntityItem, ProblemEntityPreview, ProblemEntityView } from '../types/entity'
-import Router from '@koa/router'
+import { Hono } from 'hono'
+import { HTTPException } from 'hono/http-exception'
 import {
   DiscussionListQueryResultSchema,
   DiscussionListQuerySchema,
@@ -64,23 +65,22 @@ function toProblemType (
     : fallback
 }
 
-const findProblems = async (ctx: Context) => {
-  const opt = ctx.request.query
-  const profile = ctx.state.profile
+const findProblems = async (c: AppContext) => {
+  const opt = c.req.query()
+  const profile = c.get('profile')
   const showReserved: boolean = !!profile?.isAdmin
 
   /** @todo [ TO BE DEPRECATED ] 要有专门的 Endpoint 来获取所有题目 */
   if (Number(opt.page) === -1 && profile?.isAdmin) {
     const docs = await problemService.getProblemItems()
-    ctx.body = { list: { docs, total: docs.length }, solved: [] }
-    return
+    return c.json({ list: { docs, total: docs.length }, solved: [] })
   }
 
   let courseDocId: Types.ObjectId | undefined
   if (typeof opt.course === 'string') {
-    const { course, role } = await loadCourseStateOrThrow(ctx, opt.course)
+    const { course, role } = await loadCourseStateOrThrow(c, opt.course)
     if (!role.basic) {
-      return ctx.throw(...ERR_PERM_DENIED)
+      throw new HTTPException(ERR_PERM_DENIED[0] as 403, { message: ERR_PERM_DENIED[1] as string })
     }
     courseDocId = course._id
   }
@@ -130,27 +130,27 @@ const findProblems = async (ctx: Context) => {
       .lean()
   }
 
-  ctx.body = { list, solved } as {
+  return c.json({ list, solved } as {
     list: Paginated<ProblemEntityPreview>
     solved: number[]
-  }
+  })
 }
 
-const findProblemItems = async (ctx: Context) => {
-  const opt = ctx.request.query
-  const profile = await loadProfile(ctx)
+const findProblemItems = async (c: AppContext) => {
+  const opt = c.req.query()
+  const profile = await loadProfile(c)
 
   let courseDocId: Types.ObjectId | undefined
   if (typeof opt.course === 'string') {
-    const { course, role } = await loadCourseStateOrThrow(ctx, opt.course)
+    const { course, role } = await loadCourseStateOrThrow(c, opt.course)
     if (!role.manageContest) {
-      return ctx.throw(...ERR_PERM_DENIED)
+      throw new HTTPException(ERR_PERM_DENIED[0] as 403, { message: ERR_PERM_DENIED[1] as string })
     }
     courseDocId = course._id
   }
 
   if (!courseDocId && !profile.isAdmin) {
-    return ctx.throw(...ERR_PERM_DENIED)
+    throw new HTTPException(ERR_PERM_DENIED[0] as 403, { message: ERR_PERM_DENIED[1] as string })
   }
 
   const keyword = String(opt.keyword).trim()
@@ -164,12 +164,12 @@ const findProblemItems = async (ctx: Context) => {
     response = await problemService.findProblemItems(keyword)
   }
 
-  ctx.body = response
+  return c.json(response)
 }
 
-const getProblem = async (ctx: Context) => {
-  const problem = await loadProblemOrThrow(ctx)
-  const profile = ctx.state.profile
+const getProblem = async (c: AppContext) => {
+  const problem = await loadProblemOrThrow(c)
+  const profile = c.get('profile')
 
   const isOwner = (profile?._id && problem.owner)
     ? problem.owner.equals(profile._id)
@@ -188,12 +188,12 @@ const getProblem = async (ctx: Context) => {
     })),
     isOwner,
   }
-  ctx.body = response
+  return c.json(response)
 }
 
-const createProblem = async (ctx: Context) => {
-  const opt = toObjectRecord(ctx.request.body)
-  const profile = await loadProfile(ctx)
+const createProblem = async (c: AppContext) => {
+  const opt = toObjectRecord(await c.req.json().catch(() => ({})))
+  const profile = await loadProfile(c)
   const courseInput = (typeof opt.course === 'string' || typeof opt.course === 'number')
     ? opt.course
     : undefined
@@ -202,19 +202,19 @@ const createProblem = async (ctx: Context) => {
       return true
     }
     if (courseInput != null) {
-      const { role } = await loadCourseStateOrThrow(ctx, courseInput)
+      const { role } = await loadCourseStateOrThrow(c, courseInput)
       return role.manageProblem
     }
     return false
   }
   if (!await hasPermission()) {
-    return ctx.throw(...ERR_PERM_DENIED)
+    throw new HTTPException(ERR_PERM_DENIED[0] as 403, { message: ERR_PERM_DENIED[1] as string })
   }
 
   const owner = profile._id
   let course: WithId<CourseEntity> | undefined
   if (courseInput != null) {
-    course = (await loadCourseStateOrThrow(ctx, courseInput)).course
+    course = (await loadCourseStateOrThrow(c, courseInput)).course
   }
 
   try {
@@ -236,23 +236,23 @@ const createProblem = async (ctx: Context) => {
     if (course) {
       await courseService.addCourseProblem(course._id, problem._id)
     }
-    ctx.auditLog.info(`<Problem:${problem.pid}> created by <User:${profile.uid}>`)
+    c.get('auditLog').info(`<Problem:${problem.pid}> created by <User:${profile.uid}>`)
     const response: Pick<ProblemEntity, 'pid'>
       = pick(problem, [ 'pid' ])
-    ctx.body = response
+    return c.json(response)
   } catch (err: any) {
     if (err.name === 'ValidationError') {
-      return ctx.throw(400, err.message)
+      throw new HTTPException(400, { message: err.message })
     } else {
       throw err
     }
   }
 }
 
-const updateProblem = async (ctx: Context) => {
-  const opt = toObjectRecord(ctx.request.body)
-  const problem = await loadProblemOrThrow(ctx)
-  const profile = await loadProfile(ctx)
+const updateProblem = async (c: AppContext) => {
+  const opt = toObjectRecord(await c.req.json().catch(() => ({})))
+  const problem = await loadProblemOrThrow(c)
+  const profile = await loadProfile(c)
   let canManage = profile?.isAdmin ?? false
   if (profile && !canManage && problem.owner) {
     const owner = await User.findById(problem.owner).lean()
@@ -261,7 +261,7 @@ const updateProblem = async (ctx: Context) => {
     }
   }
   if (!canManage) {
-    return ctx.throw(...ERR_PERM_DENIED)
+    throw new HTTPException(ERR_PERM_DENIED[0] as 403, { message: ERR_PERM_DENIED[1] as string })
   }
 
   const pid = problem.pid
@@ -286,62 +286,62 @@ const updateProblem = async (ctx: Context) => {
           )
         : undefined,
     })
-    ctx.auditLog.info(`<Problem:${pid}> updated by <User:${uid}>`)
+    c.get('auditLog').info(`<Problem:${pid}> updated by <User:${uid}>`)
     const response: Pick<ProblemEntity, 'pid'> & { success: boolean }
       = { pid: problem?.pid ?? -1, success: !!problem }
-    ctx.body = response
+    return c.json(response)
   } catch (err: any) {
     if (err.name === 'ValidationError') {
-      return ctx.throw(400, err.message)
+      throw new HTTPException(400, { message: err.message })
     } else {
       throw err
     }
   }
 }
 
-const removeProblem = async (ctx: Context) => {
-  const pid = ctx.params.pid
-  const profile = await loadProfile(ctx)
+const removeProblem = async (c: AppContext) => {
+  const pid = c.req.param('pid')
+  const profile = await loadProfile(c)
 
   try {
     await problemService.removeProblem(Number(pid))
-    ctx.auditLog.info(`<Problem:${pid}> removed by <User:${profile.uid}>`)
+    c.get('auditLog').info(`<Problem:${pid}> removed by <User:${profile.uid}>`)
   } catch (e: any) {
-    ctx.throw(400, e.message)
+    throw new HTTPException(400, { message: e.message })
   }
-  ctx.body = {}
+  return c.json({})
 }
 
-const getStatistics = async (ctx: Context) => {
-  const problem = await loadProblemOrThrow(ctx)
+const getStatistics = async (c: AppContext) => {
+  const problem = await loadProblemOrThrow(c)
   const statistics = await problemService.getStatistics(problem._id)
   const result = ProblemStatisticsQueryResultSchema.encode(statistics)
-  return createEnvelopedResponse(ctx, result)
+  return createEnvelopedResponse(c, result)
 }
 
-export async function findSolutions (ctx: Context) {
-  const query = ProblemSolutionListQuerySchema.safeParse(ctx.request.query)
+export async function findSolutions (c: AppContext) {
+  const query = ProblemSolutionListQuerySchema.safeParse(c.req.query())
   if (!query.success) {
-    return createZodErrorResponse(ctx, query.error)
+    return createZodErrorResponse(c, query.error)
   }
 
-  const problem = await loadProblemOrThrow(ctx)
+  const problem = await loadProblemOrThrow(c)
   const solutions = await solutionService.findSolutions({
     ...query.data,
     problem: problem.pid,
   })
   const result = ProblemSolutionListQueryResultSchema.encode(solutions)
-  return createEnvelopedResponse(ctx, result)
+  return createEnvelopedResponse(c, result)
 }
 
-export async function findProblemDiscussions (ctx: Context) {
-  const problem = await loadProblemOrThrow(ctx)
-  const query = DiscussionListQuerySchema.safeParse(ctx.request.query)
+export async function findProblemDiscussions (c: AppContext) {
+  const problem = await loadProblemOrThrow(c)
+  const query = DiscussionListQuerySchema.safeParse(c.req.query())
   if (!query.success) {
-    return createZodErrorResponse(ctx, query.error)
+    return createZodErrorResponse(c, query.error)
   }
 
-  const { profile } = ctx.state
+  const profile = c.get('profile')
   const { page, pageSize, sort, sortBy, type, author } = query.data
 
   const queryFilter: DiscussionQueryFilters = {}
@@ -380,26 +380,26 @@ export async function findProblemDiscussions (ctx: Context) {
       ...discussion, contest: null, problem: { pid: problem.pid },
     })),
   })
-  return createEnvelopedResponse(ctx, result)
+  return createEnvelopedResponse(c, result)
 }
 
-function registerProblemHandlers (router: Router) {
-  const problemRouter = new Router({ prefix: '/problem' })
+function registerProblemHandlers (app: Hono<HonoEnv>) {
+  const problemApp = new Hono<HonoEnv>()
 
-  problemRouter.get('/', findProblems)
-  problemRouter.get('/items', loginRequire, findProblemItems)
-  problemRouter.post('/', loginRequire, createProblem)
+  problemApp.get('/', findProblems)
+  problemApp.get('/items', loginRequire, findProblemItems)
+  problemApp.post('/', loginRequire, createProblem)
 
-  problemRouter.get('/:pid', getProblem)
-  problemRouter.put('/:pid', loginRequire, updateProblem)
-  problemRouter.del('/:pid', rootRequire, removeProblem)
+  problemApp.get('/:pid', getProblem)
+  problemApp.put('/:pid', loginRequire, updateProblem)
+  problemApp.delete('/:pid', rootRequire, removeProblem)
 
-  problemRouter.get('/:pid/statistics', loginRequire, getStatistics)
-  problemRouter.get('/:pid/solutions', loginRequire, findSolutions)
+  problemApp.get('/:pid/statistics', loginRequire, getStatistics)
+  problemApp.get('/:pid/solutions', loginRequire, findSolutions)
 
-  problemRouter.get('/:pid/discussions', findProblemDiscussions)
+  problemApp.get('/:pid/discussions', findProblemDiscussions)
 
-  router.use(problemRouter.routes(), problemRouter.allowedMethods())
+  app.route('/problem', problemApp)
 }
 
 export default registerProblemHandlers

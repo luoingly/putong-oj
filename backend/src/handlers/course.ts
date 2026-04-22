@@ -1,8 +1,9 @@
 import type { Paginated } from '@putongoj/shared'
-import type { Context } from 'koa'
+import type { AppContext, HonoEnv } from '../types/koa'
 import type { CourseRole } from '../types'
 import type { CourseEntity, CourseEntityItem, CourseEntityPreview, CourseEntityViewWithRole, CourseMemberView } from '../types/entity'
-import Router from '@koa/router'
+import { Hono } from 'hono'
+import { HTTPException } from 'hono/http-exception'
 import { pick } from 'lodash'
 import { adminRequire, loadProfile, loginRequire, rootRequire } from '../middlewares/authn'
 import User from '../models/User'
@@ -12,24 +13,24 @@ import problemService from '../services/problem'
 import { parsePaginateOption, toObjectRecord } from '../utils'
 import { encrypt, ERR_INVALID_ID, ERR_NOT_FOUND, ERR_PERM_DENIED } from '../utils/constants'
 
-const findCourses = async (ctx: Context) => {
-  const opt = ctx.request.query
+const findCourses = async (c: AppContext) => {
+  const opt = c.req.query()
   const { page, pageSize } = parsePaginateOption(opt, 5, 100)
 
   const response: Paginated<CourseEntityPreview>
     = await courseService.findCourses({ page, pageSize })
-  ctx.body = response
+  return c.json(response)
 }
 
-const findCourseItems = async (ctx: Context) => {
-  const keyword = String(ctx.request.query.keyword ?? '').trim()
+const findCourseItems = async (c: AppContext) => {
+  const keyword = String(c.req.query('keyword') ?? '').trim()
   const response: CourseEntityItem[]
     = await courseService.findCourseItems(keyword)
-  ctx.body = response
+  return c.json(response)
 }
 
-const getCourse = async (ctx: Context) => {
-  const { course, role } = await loadCourseStateOrThrow(ctx)
+const getCourse = async (c: AppContext) => {
+  const { course, role } = await loadCourseStateOrThrow(c)
   const response: CourseEntityViewWithRole = {
     ...pick(course, [ 'courseId', 'name', 'description', 'encrypt' ]),
     joinCode: role.manageCourse ? course.joinCode : undefined,
@@ -37,33 +38,33 @@ const getCourse = async (ctx: Context) => {
     role,
   }
 
-  ctx.body = response
+  return c.json(response)
 }
 
-const joinCourse = async (ctx: Context) => {
-  const opt = toObjectRecord(ctx.request.body)
-  const { course, role } = await loadCourseStateOrThrow(ctx)
+const joinCourse = async (c: AppContext) => {
+  const opt = toObjectRecord(await c.req.json().catch(() => ({})))
+  const { course, role } = await loadCourseStateOrThrow(c)
   const joinCode = String(opt.joinCode ?? '').trim()
   if (!joinCode) {
-    return ctx.throw(400, 'Missing join code')
+    throw new HTTPException(400, { message: 'Missing join code' })
   }
   if (course.joinCode.trim() !== joinCode) {
-    return ctx.throw(403, 'Invalid join code')
+    throw new HTTPException(403, { message: 'Invalid join code' })
   }
 
-  const profile = await loadProfile(ctx)
+  const profile = await loadProfile(c)
   const result = await courseService.updateCourseMember(
     course._id, profile._id,
     { ...role, basic: true },
   )
 
   const response: { success: boolean } = { success: result }
-  ctx.body = response
+  return c.json(response)
 }
 
-const createCourse = async (ctx: Context) => {
-  const opt = toObjectRecord(ctx.request.body)
-  const profile = await loadProfile(ctx)
+const createCourse = async (c: AppContext) => {
+  const opt = toObjectRecord(await c.req.json().catch(() => ({})))
+  const profile = await loadProfile(c)
   try {
     const course = await courseService.createCourse({
       name: String(opt.name ?? '').trim(),
@@ -72,26 +73,26 @@ const createCourse = async (ctx: Context) => {
     })
     const response: Pick<CourseEntity, 'courseId'>
       = { courseId: course.courseId }
-    ctx.auditLog.info(`<Course:${course.courseId}> created by <User:${profile.uid}>`)
-    ctx.body = response
+    c.get('auditLog').info(`<Course:${course.courseId}> created by <User:${profile.uid}>`)
+    return c.json(response)
   } catch (err: any) {
     if (err.name === 'ValidationError') {
-      return ctx.throw(400, err.message)
+      throw new HTTPException(400, { message: err.message })
     } else {
       throw err
     }
   }
 }
 
-const updateCourse = async (ctx: Context) => {
-  const { course, role } = await loadCourseStateOrThrow(ctx)
+const updateCourse = async (c: AppContext) => {
+  const { course, role } = await loadCourseStateOrThrow(c)
   if (!role.manageCourse) {
-    return ctx.throw(...ERR_PERM_DENIED)
+    throw new HTTPException(ERR_PERM_DENIED[0] as 403, { message: ERR_PERM_DENIED[1] as string })
   }
 
-  const opt = toObjectRecord(ctx.request.body)
+  const opt = toObjectRecord(await c.req.json().catch(() => ({})))
   const { courseId } = course
-  const profile = await loadProfile(ctx)
+  const profile = await loadProfile(c)
   try {
     const course = await courseService.updateCourse(
       courseId,
@@ -103,71 +104,71 @@ const updateCourse = async (ctx: Context) => {
       },
     )
     const response: { success: boolean } = { success: !!course }
-    ctx.auditLog.info(`<Course:${courseId}> updated by <User:${profile.uid}>`)
-    ctx.body = response
+    c.get('auditLog').info(`<Course:${courseId}> updated by <User:${profile.uid}>`)
+    return c.json(response)
   } catch (err: any) {
     if (err.name === 'ValidationError') {
-      return ctx.throw(400, err.message)
+      throw new HTTPException(400, { message: err.message })
     } else {
       throw err
     }
   }
 }
 
-const findCourseMembers = async (ctx: Context) => {
-  const { course, role } = await loadCourseStateOrThrow(ctx)
+const findCourseMembers = async (c: AppContext) => {
+  const { course, role } = await loadCourseStateOrThrow(c)
   if (!role.manageCourse) {
-    return ctx.throw(...ERR_PERM_DENIED)
+    throw new HTTPException(ERR_PERM_DENIED[0] as 403, { message: ERR_PERM_DENIED[1] as string })
   }
 
-  const opt = ctx.request.query
+  const opt = c.req.query()
   const { page, pageSize } = parsePaginateOption(opt, 30, 200)
 
   const response: Paginated<CourseMemberView>
     = await courseService.findCourseMembers(course._id, { page, pageSize })
-  ctx.body = response
+  return c.json(response)
 }
 
-const getCourseMember = async (ctx: Context) => {
-  const { course, role } = await loadCourseStateOrThrow(ctx)
+const getCourseMember = async (c: AppContext) => {
+  const { course, role } = await loadCourseStateOrThrow(c)
   if (!role.manageCourse) {
-    return ctx.throw(...ERR_PERM_DENIED)
+    throw new HTTPException(ERR_PERM_DENIED[0] as 403, { message: ERR_PERM_DENIED[1] as string })
   }
 
-  const { userId } = ctx.params
+  const { userId } = c.req.param()
   if (!userId) {
-    return ctx.throw(400, 'Missing uid')
+    throw new HTTPException(400, { message: 'Missing uid' })
   }
 
   const member = await courseService.getCourseMember(course._id, userId)
   if (!member) {
-    return ctx.throw(...ERR_NOT_FOUND)
+    throw new HTTPException(ERR_NOT_FOUND[0] as number as any, { message: ERR_NOT_FOUND[1] as string })
   }
 
   const response: CourseMemberView = member
-  ctx.body = response
+  return c.json(response)
 }
 
-const updateCourseMember = async (ctx: Context) => {
-  const { course, role } = await loadCourseStateOrThrow(ctx)
+const updateCourseMember = async (c: AppContext) => {
+  const { course, role } = await loadCourseStateOrThrow(c)
   if (!role.manageCourse) {
-    return ctx.throw(...ERR_PERM_DENIED)
+    throw new HTTPException(ERR_PERM_DENIED[0] as 403, { message: ERR_PERM_DENIED[1] as string })
   }
 
-  const { userId } = ctx.params
-  const body = toObjectRecord(ctx.request.body)
+  const { userId } = c.req.param()
+  const body = toObjectRecord(await c.req.json().catch(() => ({})))
   const hasRole = body.role != null
   const newRole = toObjectRecord(body.role) as Record<string, boolean>
   if (!userId || !hasRole) {
-    return ctx.throw(400, 'Missing uid or role')
+    throw new HTTPException(400, { message: 'Missing uid or role' })
   }
   const user = await User.findOne({ uid: userId })
   if (!user) {
-    return ctx.throw(404, 'User not found')
+    throw new HTTPException(404, { message: 'User not found' })
   }
-  const profile = await loadProfile(ctx)
+  const profile = await loadProfile(c)
   if (profile.uid === userId) {
-    return ctx.throw(400, 'Cannot change your own role')
+    throw new HTTPException(400, { message: 'Cannot change your own role' })
   }
 
   const roleFields: Array<keyof CourseRole> = [
@@ -180,10 +181,10 @@ const updateCourseMember = async (ctx: Context) => {
   ]
   const invalidField = roleFields.find(field => typeof newRole[field] !== 'boolean')
   if (invalidField) {
-    return ctx.throw(400, `Invalid role field: ${invalidField}`)
+    throw new HTTPException(400, { message: `Invalid role field: ${invalidField}` })
   }
   if (!newRole.basic) {
-    return ctx.throw(400, 'Basic permission is required, remove member if not needed')
+    throw new HTTPException(400, { message: 'Basic permission is required, remove member if not needed' })
   }
 
   const result = await courseService.updateCourseMember(
@@ -198,38 +199,38 @@ const updateCourseMember = async (ctx: Context) => {
       manageCourse: newRole.manageCourse,
     },
   )
-  ctx.auditLog.info(`<Course:${course.courseId}> member <User:${userId}> updated by <User:${profile.uid}>`)
+  c.get('auditLog').info(`<Course:${course.courseId}> member <User:${userId}> updated by <User:${profile.uid}>`)
   const response: { success: boolean } = { success: result }
-  ctx.body = response
+  return c.json(response)
 }
 
-const removeCourseMember = async (ctx: Context) => {
-  const { course, role } = await loadCourseStateOrThrow(ctx)
+const removeCourseMember = async (c: AppContext) => {
+  const { course, role } = await loadCourseStateOrThrow(c)
   if (!role.manageCourse) {
-    return ctx.throw(...ERR_PERM_DENIED)
+    throw new HTTPException(ERR_PERM_DENIED[0] as 403, { message: ERR_PERM_DENIED[1] as string })
   }
 
-  const { userId } = ctx.params
+  const { userId } = c.req.param()
   if (!userId) {
-    return ctx.throw(400, 'Missing uid')
+    throw new HTTPException(400, { message: 'Missing uid' })
   }
-  const profile = await loadProfile(ctx)
+  const profile = await loadProfile(c)
   if (profile.uid === userId) {
-    return ctx.throw(400, 'Cannot remove yourself from the course')
+    throw new HTTPException(400, { message: 'Cannot remove yourself from the course' })
   }
 
   const result = await courseService.removeCourseMember(course._id, userId)
   const response: { success: boolean } = { success: result }
-  ctx.auditLog.info(`<Course:${course.courseId}> member <User:${userId}> removed by <User:${profile.uid}>`)
-  ctx.body = response
+  c.get('auditLog').info(`<Course:${course.courseId}> member <User:${userId}> removed by <User:${profile.uid}>`)
+  return c.json(response)
 }
 
-const addCourseProblems = async (ctx: Context) => {
-  const { course } = await loadCourseStateOrThrow(ctx)
-  const body = toObjectRecord(ctx.request.body)
+const addCourseProblems = async (c: AppContext) => {
+  const { course } = await loadCourseStateOrThrow(c)
+  const body = toObjectRecord(await c.req.json().catch(() => ({})))
   const problemIds = body.problemIds
   if (!Array.isArray(problemIds) || problemIds.length === 0) {
-    return ctx.throw(400, 'problemIds must be a non-empty array')
+    throw new HTTPException(400, { message: 'problemIds must be a non-empty array' })
   }
 
   const result = await Promise.all(problemIds.map(async (pid: any) => {
@@ -245,68 +246,68 @@ const addCourseProblems = async (ctx: Context) => {
     success: successCount === problemIds.length,
     added: successCount,
   }
-  const profile = await loadProfile(ctx)
-  ctx.auditLog.info(`<Course:${course.courseId}> added ${successCount} problems by <User:${profile.uid}>`)
-  ctx.body = response
+  const profile = await loadProfile(c)
+  c.get('auditLog').info(`<Course:${course.courseId}> added ${successCount} problems by <User:${profile.uid}>`)
+  return c.json(response)
 }
 
-const moveCourseProblem = async (ctx: Context) => {
-  const { course } = await loadCourseStateOrThrow(ctx)
-  const body = toObjectRecord(ctx.request.body)
+const moveCourseProblem = async (c: AppContext) => {
+  const { course } = await loadCourseStateOrThrow(c)
+  const body = toObjectRecord(await c.req.json().catch(() => ({})))
   const beforePos = Number(body.beforePos ?? 1)
-  const problemId = ctx.params.problemId
+  const problemId = c.req.param('problemId')
   const problem = await problemService.getProblem(problemId)
   if (!problem) {
-    return ctx.throw(...ERR_INVALID_ID)
+    throw new HTTPException(ERR_INVALID_ID[0] as number as any, { message: ERR_INVALID_ID[1] as string })
   }
   const result = await courseService.moveCourseProblem(
     course._id, problem._id, beforePos,
   )
-  ctx.body = { success: result }
+  return c.json({ success: result })
 }
 
-const rearrangeCourseProblem = async (ctx: Context) => {
-  const { course } = await loadCourseStateOrThrow(ctx)
+const rearrangeCourseProblem = async (c: AppContext) => {
+  const { course } = await loadCourseStateOrThrow(c)
   try {
     await courseService.rearrangeCourseProblem(course._id)
-    ctx.body = { success: true }
+    return c.json({ success: true })
   } catch (e: any) {
-    ctx.throw(500, `Failed to rearrange course problems: ${e.message}`)
+    throw new HTTPException(500, { message: `Failed to rearrange course problems: ${e.message}` })
   }
 }
 
-const removeCourseProblem = async (ctx: Context) => {
-  const { course } = await loadCourseStateOrThrow(ctx)
-  const problemId = ctx.params.problemId
+const removeCourseProblem = async (c: AppContext) => {
+  const { course } = await loadCourseStateOrThrow(c)
+  const problemId = c.req.param('problemId')
   const problem = await problemService.getProblem(problemId)
   if (!problem) {
-    return ctx.throw(...ERR_INVALID_ID)
+    throw new HTTPException(ERR_INVALID_ID[0] as number as any, { message: ERR_INVALID_ID[1] as string })
   }
   const result = await courseService.removeCourseProblem(course._id, problem._id)
-  const profile = await loadProfile(ctx)
-  ctx.auditLog.info(`<Course:${course.courseId}> removed <Problem:${problemId}> by <User:${profile.uid}>`)
-  ctx.body = { success: result }
+  const profile = await loadProfile(c)
+  c.get('auditLog').info(`<Course:${course.courseId}> removed <Problem:${problemId}> by <User:${profile.uid}>`)
+  return c.json({ success: result })
 }
 
-function registerCourseHandlers (router: Router) {
-  const courseRouter = new Router({ prefix: '/course' })
+function registerCourseHandlers (app: Hono<HonoEnv>) {
+  const courseApp = new Hono<HonoEnv>()
 
-  courseRouter.get('/', findCourses)
-  courseRouter.get('/items', loginRequire, findCourseItems)
-  courseRouter.post('/', rootRequire, createCourse)
-  courseRouter.get('/:courseId', loginRequire, getCourse)
-  courseRouter.post('/:courseId', loginRequire, joinCourse)
-  courseRouter.put('/:courseId', loginRequire, updateCourse)
-  courseRouter.get('/:courseId/member', loginRequire, findCourseMembers)
-  courseRouter.get('/:courseId/member/:userId', loginRequire, getCourseMember)
-  courseRouter.post('/:courseId/member/:userId', loginRequire, updateCourseMember)
-  courseRouter.delete('/:courseId/member/:userId', loginRequire, removeCourseMember)
-  courseRouter.post('/:courseId/problem', adminRequire, addCourseProblems)
-  courseRouter.put('/:courseId/problem/:problemId', adminRequire, moveCourseProblem)
-  courseRouter.post('/:courseId/problem/rearrange', rootRequire, rearrangeCourseProblem)
-  courseRouter.delete('/:courseId/problem/:problemId', adminRequire, removeCourseProblem)
+  courseApp.get('/', findCourses)
+  courseApp.get('/items', loginRequire, findCourseItems)
+  courseApp.post('/', rootRequire, createCourse)
+  courseApp.get('/:courseId', loginRequire, getCourse)
+  courseApp.post('/:courseId', loginRequire, joinCourse)
+  courseApp.put('/:courseId', loginRequire, updateCourse)
+  courseApp.get('/:courseId/member', loginRequire, findCourseMembers)
+  courseApp.get('/:courseId/member/:userId', loginRequire, getCourseMember)
+  courseApp.post('/:courseId/member/:userId', loginRequire, updateCourseMember)
+  courseApp.delete('/:courseId/member/:userId', loginRequire, removeCourseMember)
+  courseApp.post('/:courseId/problem', adminRequire, addCourseProblems)
+  courseApp.put('/:courseId/problem/:problemId', adminRequire, moveCourseProblem)
+  courseApp.post('/:courseId/problem/rearrange', rootRequire, rearrangeCourseProblem)
+  courseApp.delete('/:courseId/problem/:problemId', adminRequire, removeCourseProblem)
 
-  router.use(courseRouter.routes(), courseRouter.allowedMethods())
+  app.route('/course', courseApp)
 }
 
 export default registerCourseHandlers
