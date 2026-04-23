@@ -1,8 +1,7 @@
 import type { OAuthConnection } from '@putongoj/shared'
-import type { AppContext, HonoEnv } from '../types/koa'
 import type { UserDocument } from '../models/User'
 import type { OAuthState } from '../services/oauth'
-import { Hono } from 'hono'
+import type { AppContext, HonoEnv } from '../types/koa'
 import {
   ErrorCode,
   OAuthAction,
@@ -14,6 +13,7 @@ import {
   OAuthProviderSchema,
   OAuthUserConnectionsQueryResultSchema,
 } from '@putongoj/shared'
+import { Hono } from 'hono'
 import { loadProfile, loginRequire } from '../middlewares/authn'
 import oauthService from '../services/oauth'
 import sessionService from '../services/session'

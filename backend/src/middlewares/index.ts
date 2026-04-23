@@ -1,7 +1,7 @@
 import type { MiddlewareHandler } from 'hono'
 import type { HonoEnv } from '../types/koa'
 import { ErrorCode, ErrorCodeValues } from '@putongoj/shared'
-import { getCookie, setCookie, deleteCookie } from 'hono/cookie'
+import { deleteCookie, getCookie, setCookie } from 'hono/cookie'
 import { HTTPException } from 'hono/http-exception'
 import config from '../config'
 import { COOKIE_NAME, COOKIE_OPTIONS, decodeCookie, encodeCookie } from '../services/cookieSession'
@@ -11,7 +11,6 @@ import authnMiddleware from './authn'
 
 export const parseClientIp: MiddlewareHandler<HonoEnv> = async (c, next) => {
   const { reverseProxy } = config
-  // @ts-ignore - accessing Node.js socket via Hono node-server env
   const remoteIp: string = (c.env as any)?.incoming?.socket?.remoteAddress || '127.0.0.1'
   if (!reverseProxy.enabled) {
     c.set('clientIp', remoteIp)
@@ -86,7 +85,7 @@ export const setupAuditLog: MiddlewareHandler<HonoEnv> = async (c, next) => {
 
 export const setupSession: MiddlewareHandler<HonoEnv> = async (c, next) => {
   const cookieValue = getCookie(c, COOKIE_NAME)
-  let session = cookieValue
+  const session = cookieValue
     ? decodeCookie(cookieValue, config.secretKey) ?? {}
     : {}
 
@@ -113,7 +112,7 @@ export const setupRequestContext: MiddlewareHandler<HonoEnv> = async (c, next) =
   await next()
 }
 
-export function createOnError (app: { fetch: any }) {
+export function createOnError (_app: { fetch: any }) {
   return (err: Error, c: any) => {
     const auditLog = c.get('auditLog')
 

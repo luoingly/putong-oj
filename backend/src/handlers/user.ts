@@ -1,7 +1,5 @@
-import type { AppContext, HonoEnv } from '../types/koa'
 import type { UserDocument } from '../models/User'
-import { Hono } from 'hono'
-import { HTTPException } from 'hono/http-exception'
+import type { AppContext, HonoEnv } from '../types/koa'
 import {
   ErrorCode,
   JudgeStatus,
@@ -14,6 +12,8 @@ import {
   UserSuggestQueryResultSchema,
   UserSuggestQuerySchema,
 } from '@putongoj/shared'
+import { Hono } from 'hono'
+import { HTTPException } from 'hono/http-exception'
 import difference from 'lodash/difference'
 import { adminRequire, loadProfile, loginRequire } from '../middlewares/authn'
 import { dataExportLimit } from '../middlewares/ratelimit'
@@ -33,7 +33,7 @@ export async function loadUser (
 ): Promise<UserDocument> {
   const uid = String(c.req.param('uid') || input || '').trim()
   if (!uid) {
-    throw new HTTPException(ERR_INVALID_ID[0] as number, { message: ERR_INVALID_ID[1] })
+    throw new HTTPException(ERR_INVALID_ID[0] as any, { message: ERR_INVALID_ID[1] })
   }
   if (c.get('user')?.uid === uid) {
     return c.get('user')!
@@ -41,7 +41,7 @@ export async function loadUser (
 
   const user = await userService.getUser(uid)
   if (!user) {
-    throw new HTTPException(ERR_NOT_FOUND[0] as number, { message: ERR_NOT_FOUND[1] })
+    throw new HTTPException(ERR_NOT_FOUND[0] as any, { message: ERR_NOT_FOUND[1] })
   }
 
   c.set('user', user)

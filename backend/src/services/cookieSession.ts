@@ -1,5 +1,6 @@
-import { createHmac, timingSafeEqual } from 'node:crypto'
 import type { SessionData } from '../types/koa'
+import { Buffer } from 'node:buffer'
+import { createHmac, timingSafeEqual } from 'node:crypto'
 
 const COOKIE_NAME = 'ptoj.session'
 const COOKIE_OPTIONS = {
@@ -41,4 +42,4 @@ function decodeCookie (value: string, secret: string): SessionData | null {
   }
 }
 
-export { COOKIE_NAME, COOKIE_OPTIONS, encodeCookie, decodeCookie }
+export { COOKIE_NAME, COOKIE_OPTIONS, decodeCookie, encodeCookie }

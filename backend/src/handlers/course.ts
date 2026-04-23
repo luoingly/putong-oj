@@ -1,7 +1,7 @@
 import type { Paginated } from '@putongoj/shared'
-import type { AppContext, HonoEnv } from '../types/koa'
 import type { CourseRole } from '../types'
 import type { CourseEntity, CourseEntityItem, CourseEntityPreview, CourseEntityViewWithRole, CourseMemberView } from '../types/entity'
+import type { AppContext, HonoEnv } from '../types/koa'
 import { Hono } from 'hono'
 import { HTTPException } from 'hono/http-exception'
 import { pick } from 'lodash'
@@ -255,7 +255,7 @@ const moveCourseProblem = async (c: AppContext) => {
   const { course } = await loadCourseStateOrThrow(c)
   const body = toObjectRecord(await c.req.json().catch(() => ({})))
   const beforePos = Number(body.beforePos ?? 1)
-  const problemId = c.req.param('problemId')
+  const problemId = Number(c.req.param('problemId'))
   const problem = await problemService.getProblem(problemId)
   if (!problem) {
     throw new HTTPException(ERR_INVALID_ID[0] as number as any, { message: ERR_INVALID_ID[1] as string })
@@ -278,7 +278,7 @@ const rearrangeCourseProblem = async (c: AppContext) => {
 
 const removeCourseProblem = async (c: AppContext) => {
   const { course } = await loadCourseStateOrThrow(c)
-  const problemId = c.req.param('problemId')
+  const problemId = Number(c.req.param('problemId'))
   const problem = await problemService.getProblem(problemId)
   if (!problem) {
     throw new HTTPException(ERR_INVALID_ID[0] as number as any, { message: ERR_INVALID_ID[1] as string })

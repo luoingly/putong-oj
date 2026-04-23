@@ -1,7 +1,6 @@
 import type { AppContext, HonoEnv } from '../types/koa'
 import { Buffer } from 'node:buffer'
 import { timingSafeEqual } from 'node:crypto'
-import { Hono } from 'hono'
 import {
   AccountChangePasswordPayloadSchema,
   AccountEditPayloadSchema,
@@ -15,6 +14,7 @@ import {
   SessionRevokeOthersResultSchema,
   UserPrivilege,
 } from '@putongoj/shared'
+import { Hono } from 'hono'
 import { checkSession, loadProfile, loginRequire } from '../middlewares/authn'
 import { userLoginLimit, userRegisterLimit } from '../middlewares/ratelimit'
 import cryptoService from '../services/crypto'

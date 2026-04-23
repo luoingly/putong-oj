@@ -18,7 +18,7 @@ export interface AuditLog {
   warn: (message: string) => void
 }
 
-export type HonoEnv = {
+export interface HonoEnv {
   Variables: {
     clientIp: string
     requestId: string

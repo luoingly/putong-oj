@@ -1,7 +1,7 @@
-import type { AppContext } from '../types/koa'
 import type { Types } from 'mongoose'
 import type { CourseRole, WithId } from '../types'
 import type { CourseEntity } from '../types/entity'
+import type { AppContext } from '../types/koa'
 import { HTTPException } from 'hono/http-exception'
 import Course from '../models/Course'
 import courseService from '../services/course'
@@ -63,7 +63,7 @@ export async function loadCourseRoleById (c: AppContext, objectId: Types.ObjectI
 export async function loadCourseStateOrThrow (c: AppContext, inputId?: number | string) {
   const state = await loadCourseState(c, inputId)
   if (!state) {
-    throw new HTTPException(ERR_NOT_FOUND[0] as number, { message: ERR_NOT_FOUND[1] })
+    throw new HTTPException(ERR_NOT_FOUND[0] as any, { message: ERR_NOT_FOUND[1] })
   }
   return state
 }

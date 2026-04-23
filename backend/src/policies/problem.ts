@@ -1,6 +1,6 @@
-import type { AppContext } from '../types/koa'
 import type { Types } from 'mongoose'
 import type { ProblemDocumentPopulated } from '../models/Problem'
+import type { AppContext } from '../types/koa'
 import { HTTPException } from 'hono/http-exception'
 import { loadContestState } from '../policies/contest'
 import courseService from '../services/course'
@@ -71,7 +71,7 @@ export async function loadProblemState (c: AppContext, inputId?: string | number
 export async function loadProblemOrThrow (c: AppContext, inputId?: string | number, fromContestId?: number) {
   const problemState = await loadProblemState(c, inputId, fromContestId)
   if (!problemState) {
-    throw new HTTPException(ERR_NOT_FOUND[0] as number, { message: ERR_NOT_FOUND[1] })
+    throw new HTTPException(ERR_NOT_FOUND[0] as any, { message: ERR_NOT_FOUND[1] })
   }
   return problemState.problem
 }

@@ -1,6 +1,6 @@
 import type { PostModel } from '@putongoj/shared'
-import type { AppContext } from '../types/koa'
 import type { WithId } from '../types'
+import type { AppContext } from '../types/koa'
 import Post from '../models/Post'
 
 export interface PostState {

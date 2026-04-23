@@ -1,9 +1,7 @@
 import type { ContestModel } from '@putongoj/shared'
-import type { AppContext, HonoEnv } from '../types/koa'
 import type { Types } from 'mongoose'
 import type { DiscussionQueryFilters } from '../services/discussion'
-import { Hono } from 'hono'
-import { HTTPException } from 'hono/http-exception'
+import type { AppContext, HonoEnv } from '../types/koa'
 import {
   ContestConfigEditPayloadSchema,
   ContestConfigQueryResultSchema,
@@ -27,6 +25,8 @@ import {
   JudgeStatus,
   ParticipationStatus,
 } from '@putongoj/shared'
+import { Hono } from 'hono'
+import { HTTPException } from 'hono/http-exception'
 import { loadProfile, loginRequire } from '../middlewares/authn'
 import { dataExportLimit } from '../middlewares/ratelimit'
 import Group from '../models/Group'
@@ -140,7 +140,7 @@ async function updateParticipantStatus (c: AppContext) {
   }
 
   const profile = await loadProfile(c)
-  const user = await getUser(c.req.param('username'))
+  const user = await getUser(c.req.param('username')!)
   if (!user) {
     return createErrorResponse(c, ErrorCode.NotFound, 'User not found')
   }

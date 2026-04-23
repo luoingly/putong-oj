@@ -1,7 +1,7 @@
 import type { AppContext, HonoEnv } from '../types/koa'
 import { env } from 'node:process'
-import { Hono } from 'hono'
 import { AvatarPresetsQueryResultSchema, PublicConfigQueryResultSchema } from '@putongoj/shared'
+import { Hono } from 'hono'
 import { v4 } from 'uuid'
 import { globalConfig } from '../config'
 import redis from '../config/redis'

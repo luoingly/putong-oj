@@ -1,11 +1,9 @@
-import type { AppContext, HonoEnv } from '../types/koa'
 import type { Types } from 'mongoose'
 import type { CourseDocument } from '../models/Course'
 import type { ProblemState } from '../policies/problem'
+import type { AppContext, HonoEnv } from '../types/koa'
 import { Buffer } from 'node:buffer'
 import path from 'node:path'
-import { Hono } from 'hono'
-import { HTTPException } from 'hono/http-exception'
 import {
   ErrorCode,
   JudgeStatus,
@@ -13,6 +11,8 @@ import {
   SolutionSubmitResultSchema,
 } from '@putongoj/shared'
 import fse from 'fs-extra'
+import { Hono } from 'hono'
+import { HTTPException } from 'hono/http-exception'
 import { pick } from 'lodash'
 import redis from '../config/redis'
 import { loadProfile, loginRequire, rootRequire } from '../middlewares/authn'
@@ -26,7 +26,7 @@ import { loadProblemState } from '../policies/problem'
 import { createEnvelopedResponse, createErrorResponse, createZodErrorResponse, toObjectRecord } from '../utils'
 
 export async function findOne (c: AppContext) {
-  const opt = Number.parseInt(c.req.param('sid'), 10)
+  const opt = Number.parseInt(c.req.param('sid') ?? '', 10)
   if (!Number.isInteger(opt) || opt <= 0) {
     throw new HTTPException(400, { message: 'Invalid submission id' })
   }

@@ -1,6 +1,6 @@
 import type { MiddlewareHandler } from 'hono'
-import type { AppContext, HonoEnv } from '../types/koa'
 import type { UserDocument } from '../models/User'
+import type { AppContext, HonoEnv } from '../types/koa'
 import { HTTPException } from 'hono/http-exception'
 import User from '../models/User'
 import sessionService from '../services/session'
@@ -59,7 +59,7 @@ export async function checkSession (c: AppContext): Promise<UserDocument | undef
 export async function loadProfile (c: AppContext): Promise<UserDocument> {
   const profile = await checkSession(c)
   if (!profile) {
-    throw new HTTPException(ERR_LOGIN_REQUIRE[0] as number, { message: ERR_LOGIN_REQUIRE[1] })
+    throw new HTTPException(ERR_LOGIN_REQUIRE[0] as any, { message: ERR_LOGIN_REQUIRE[1] })
   }
   return profile
 }
@@ -72,7 +72,7 @@ export const loginRequire: MiddlewareHandler<HonoEnv> = async (c, next) => {
 export const adminRequire: MiddlewareHandler<HonoEnv> = async (c, next) => {
   const profile = await loadProfile(c)
   if (!profile.isAdmin) {
-    throw new HTTPException(ERR_PERM_DENIED[0] as number, { message: ERR_PERM_DENIED[1] })
+    throw new HTTPException(ERR_PERM_DENIED[0] as any, { message: ERR_PERM_DENIED[1] })
   }
   await next()
 }
@@ -80,7 +80,7 @@ export const adminRequire: MiddlewareHandler<HonoEnv> = async (c, next) => {
 export const rootRequire: MiddlewareHandler<HonoEnv> = async (c, next) => {
   const profile = await loadProfile(c)
   if (!profile.isRoot) {
-    throw new HTTPException(ERR_PERM_DENIED[0] as number, { message: ERR_PERM_DENIED[1] })
+    throw new HTTPException(ERR_PERM_DENIED[0] as any, { message: ERR_PERM_DENIED[1] })
   }
   await next()
 }
