@@ -192,11 +192,14 @@ export async function getTestcase (c: AppContext) {
   }
 
   const { pid } = problem
-  const uuidParam = String(c.req.param('uuid') || '').trim()
+  const file = String(c.req.param('file') || '').trim()
+  const dotIndex = file.lastIndexOf('.')
+  const uuidParam = dotIndex >= 0 ? file.slice(0, dotIndex) : file
+  const type = dotIndex >= 0 ? file.slice(dotIndex + 1) : ''
+
   if (!validate(uuidParam) || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(uuidParam)) {
     throw new HTTPException(ERR_INVALID_ID[0] as number as any, { message: ERR_INVALID_ID[1] as string })
   }
-  const type = String(c.req.param('type') || '').trim()
   if (type !== 'in' && type !== 'out') {
     throw new HTTPException(400, { message: 'Invalid type' })
   }
@@ -220,7 +223,7 @@ function registerTestcaseHandlers (app: Hono<HonoEnv>) {
   testcaseApp.get('/', loginRequire, findTestcases)
   testcaseApp.post('/', loginRequire, createTestcase)
   testcaseApp.get('/export', loginRequire, dataExportLimit, exportTestcases)
-  testcaseApp.get('/:uuid{[0-9a-f-]+}.:type', loginRequire, getTestcase)
+  testcaseApp.get('/:file', loginRequire, getTestcase)
   testcaseApp.delete('/:uuid', loginRequire, removeTestcase)
 
   app.route('/problem/:pid/testcases', testcaseApp)

@@ -265,6 +265,7 @@ function registerSolutionHandlers (app: Hono<HonoEnv>) {
   solutionApp.get('/:sid', loginRequire, findOne)
   solutionApp.put('/:sid', rootRequire, updateSolution)
   solutionApp.post('/', loginRequire, solutionCreateLimit, create)
+  solutionApp.all('/:sid', c => c.body('Method Not Allowed', 405))
 
   app.route('/status', solutionApp)
 }

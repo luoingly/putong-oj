@@ -22,7 +22,7 @@ import './config/db'
 
 const publicDir = path.resolve(__dirname, '..', 'public')
 
-const honoApp = new Hono<HonoEnv>()
+const honoApp = new Hono<HonoEnv>({ strict: false })
 
 // Logger for development
 if (env.NODE_ENV === 'development') {
