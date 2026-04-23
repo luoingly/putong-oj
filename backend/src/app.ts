@@ -52,9 +52,9 @@ honoApp.onError(createOnError(honoApp))
 // Compatibility wrapper: app.listen() creates a new http.Server per call,
 // matching Koa's behaviour so supertest tests continue to work.
 const app = {
-  listen (...args: Parameters<ReturnType<typeof createAdaptorServer>['listen']>) {
+  listen (...args: any[]) {
     const server = createAdaptorServer({ fetch: honoApp.fetch })
-    return (server.listen as (...a: typeof args) => ReturnType<typeof createAdaptorServer>)(...args)
+    return server.listen(...args)
   },
 }
 

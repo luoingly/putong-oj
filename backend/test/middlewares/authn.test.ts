@@ -1,5 +1,6 @@
 import type { UserDocument } from '../../src/models/User'
 import test from 'ava'
+import { HTTPException } from 'hono/http-exception'
 import authnMiddleware from '../../src/middlewares/authn'
 import User from '../../src/models/User'
 import sessionService from '../../src/services/session'
@@ -21,248 +22,221 @@ test.before('resolve user ids', async () => {
   }
 })
 
-const parseError = (code: number, message: string): string => {
-  return `Error ${code}: ${message}`
-}
-
-const throwError = (code: number, message: string) => {
-  throw new Error(parseError(code, message))
+/** Create a minimal Hono-style context mock for authn tests. */
+function makeMockCtx (initial: Record<string, any> = {}) {
+  const store: Record<string, any> = {
+    auditLog: noopLog,
+    session: {},
+    ...initial,
+  }
+  return {
+    get: (key: string) => store[key],
+    set: (key: string, val: any) => { store[key] = val },
+    _store: store,
+  } as any
 }
 
 // ─── checkSession ──────────────────────────────────────────────────────────
 
 test('checkSession (no session)', async (t) => {
-  const ctx = { state: {}, session: {}, auditLog: noopLog } as any
+  const c = makeMockCtx()
 
-  const result = await authnMiddleware.checkSession(ctx)
+  const result = await authnMiddleware.checkSession(c)
   t.is(result, undefined)
-  t.is(ctx.state.profile, undefined)
+  t.is(c.get('profile'), undefined)
 })
 
 test('checkSession (already checked)', async (t) => {
   const fakeProfile = { uid: 'already' } as any
-  const ctx = {
-    state: { authnChecked: true, profile: fakeProfile },
-    auditLog: noopLog,
-  } as any
+  const c = makeMockCtx({ authnChecked: true, profile: fakeProfile })
 
-  const result = await authnMiddleware.checkSession(ctx)
+  const result = await authnMiddleware.checkSession(c)
   t.is(result, fakeProfile)
-  t.is(ctx.state.authnChecked, true)
+  t.is(c.get('authnChecked'), true)
 })
 
 test('checkSession (session not in Redis)', async (t) => {
   const { _id } = testUsers.MauthnNormal
-  const ctx = {
-    state: {},
+  const c = makeMockCtx({
     session: { userId: _id, sessionId: 'nonexistent_session_id' },
-    auditLog: noopLog,
-  } as any
+  })
 
-  const result = await authnMiddleware.checkSession(ctx)
+  const result = await authnMiddleware.checkSession(c)
   t.is(result, undefined)
-  t.is(ctx.state.profile, undefined)
-  t.is(ctx.session.userId, undefined)
-  t.is(ctx.session.sessionId, undefined)
+  t.is(c.get('profile'), undefined)
+  t.is(c.get('session').userId, undefined)
+  t.is(c.get('session').sessionId, undefined)
 })
 
 test('checkSession (non-existent user)', async (t) => {
   // Create a session for a userId that doesn't exist in MongoDB
   const sessionId = await sessionService.createSession(nonExistUserId, '127.0.0.1', 'test')
-  const ctx = {
-    state: {},
+  const c = makeMockCtx({
     session: { userId: nonExistUserId, sessionId },
-    auditLog: noopLog,
-  } as any
+  })
 
-  const result = await authnMiddleware.checkSession(ctx)
+  const result = await authnMiddleware.checkSession(c)
   t.is(result, undefined)
-  t.is(ctx.state.profile, undefined)
-  t.is(ctx.session.userId, undefined)
-  t.is(ctx.session.sessionId, undefined)
+  t.is(c.get('profile'), undefined)
+  t.is(c.get('session').userId, undefined)
+  t.is(c.get('session').sessionId, undefined)
 })
 
 test('checkSession (banned user)', async (t) => {
   const { _id } = testUsers.MauthnBanned
   const sessionId = await sessionService.createSession(_id, '127.0.0.1', 'test')
-  const ctx = {
-    state: {},
+  const c = makeMockCtx({
     session: { userId: _id, sessionId },
-    auditLog: noopLog,
-  } as any
+  })
 
-  const result = await authnMiddleware.checkSession(ctx)
+  const result = await authnMiddleware.checkSession(c)
   t.is(result, undefined)
-  t.is(ctx.state.profile, undefined)
-  t.is(ctx.session.userId, undefined)
-  t.is(ctx.session.sessionId, undefined)
+  t.is(c.get('profile'), undefined)
+  t.is(c.get('session').userId, undefined)
+  t.is(c.get('session').sessionId, undefined)
 })
 
 test('checkSession (normal user)', async (t) => {
   const { _id } = testUsers.MauthnNormal
   const sessionId = await sessionService.createSession(_id, '127.0.0.1', 'test')
-  const ctx = {
-    state: {},
+  const c = makeMockCtx({
     session: { userId: _id, sessionId },
-    auditLog: noopLog,
-  } as any
+  })
 
-  const result = await authnMiddleware.checkSession(ctx)
+  const result = await authnMiddleware.checkSession(c)
   t.truthy(result)
   t.is(result?.uid, userSeeds.MauthnNormal.uid)
-  t.is(ctx.state.profile?.uid, userSeeds.MauthnNormal.uid)
-  t.is(ctx.state.sessionId, sessionId)
+  t.is(c.get('profile')?.uid, userSeeds.MauthnNormal.uid)
+  t.is(c.get('sessionId'), sessionId)
 })
 
 // ─── loginRequire ──────────────────────────────────────────────────────────
 
 test('loginRequire (no session)', async (t) => {
-  const ctx = { state: {}, session: {}, throw: throwError, auditLog: noopLog } as any
+  const c = makeMockCtx()
 
-  await t.throwsAsync(
-    authnMiddleware.loginRequire(ctx, async () => { }),
-    { message: parseError(...ERR_LOGIN_REQUIRE) },
+  const err = await t.throwsAsync(
+    authnMiddleware.loginRequire(c, async () => {}),
+    { instanceOf: HTTPException },
   )
+  t.is(err?.status, ERR_LOGIN_REQUIRE[0] as any)
+  t.is(err?.message, ERR_LOGIN_REQUIRE[1])
 })
 
 test('loginRequire (banned user)', async (t) => {
   const { _id } = testUsers.MauthnBanned
   const sessionId = await sessionService.createSession(_id, '127.0.0.1', 'test')
-  const ctx = {
-    state: {},
-    session: { userId: _id, sessionId },
-    throw: throwError,
-    auditLog: noopLog,
-  } as any
+  const c = makeMockCtx({ session: { userId: _id, sessionId } })
 
-  await t.throwsAsync(
-    authnMiddleware.loginRequire(ctx, async () => { }),
-    { message: parseError(...ERR_LOGIN_REQUIRE) },
+  const err = await t.throwsAsync(
+    authnMiddleware.loginRequire(c, async () => {}),
+    { instanceOf: HTTPException },
   )
+  t.is(err?.status, ERR_LOGIN_REQUIRE[0] as any)
+  t.is(err?.message, ERR_LOGIN_REQUIRE[1])
 })
 
 test('loginRequire (valid user)', async (t) => {
   const { _id } = testUsers.MauthnNormal
   const sessionId = await sessionService.createSession(_id, '127.0.0.1', 'test')
-  const ctx = {
-    state: {},
-    session: { userId: _id, sessionId },
-    auditLog: noopLog,
-  } as any
+  const c = makeMockCtx({ session: { userId: _id, sessionId } })
 
   let nextCalled = false
-  await authnMiddleware.loginRequire(ctx, async () => { nextCalled = true })
+  await authnMiddleware.loginRequire(c, async () => { nextCalled = true })
   t.true(nextCalled)
 })
 
 // ─── adminRequire ──────────────────────────────────────────────────────────
 
 test('adminRequire (no session)', async (t) => {
-  const ctx = { state: {}, session: {}, throw: throwError, auditLog: noopLog } as any
+  const c = makeMockCtx()
 
-  await t.throwsAsync(
-    async () => authnMiddleware.adminRequire(ctx, async () => { }),
-    { message: parseError(...ERR_LOGIN_REQUIRE) },
+  const err = await t.throwsAsync(
+    async () => authnMiddleware.adminRequire(c, async () => {}),
+    { instanceOf: HTTPException },
   )
+  t.is(err?.status, ERR_LOGIN_REQUIRE[0] as any)
+  t.is(err?.message, ERR_LOGIN_REQUIRE[1])
 })
 
 test('adminRequire (normal user)', async (t) => {
   const { _id } = testUsers.MauthnNormal
   const sessionId = await sessionService.createSession(_id, '127.0.0.1', 'test')
-  const ctx = {
-    state: {},
-    session: { userId: _id, sessionId },
-    throw: throwError,
-    auditLog: noopLog,
-  } as any
+  const c = makeMockCtx({ session: { userId: _id, sessionId } })
 
-  await t.throwsAsync(
-    async () => authnMiddleware.adminRequire(ctx, async () => { }),
-    { message: parseError(...ERR_PERM_DENIED) },
+  const err = await t.throwsAsync(
+    async () => authnMiddleware.adminRequire(c, async () => {}),
+    { instanceOf: HTTPException },
   )
+  t.is(err?.status, ERR_PERM_DENIED[0] as any)
+  t.is(err?.message, ERR_PERM_DENIED[1])
 })
 
 test('adminRequire (admin user)', async (t) => {
   const { _id } = testUsers.MauthnAdmin
   const sessionId = await sessionService.createSession(_id, '127.0.0.1', 'test')
-  const ctx = {
-    state: {},
-    session: { userId: _id, sessionId },
-    auditLog: noopLog,
-  } as any
+  const c = makeMockCtx({ session: { userId: _id, sessionId } })
 
   let nextCalled = false
-  await authnMiddleware.adminRequire(ctx, async () => { nextCalled = true })
+  await authnMiddleware.adminRequire(c, async () => { nextCalled = true })
   t.true(nextCalled)
 })
 
 test('adminRequire (root user)', async (t) => {
   const { _id } = testUsers.MauthnRoot
   const sessionId = await sessionService.createSession(_id, '127.0.0.1', 'test')
-  const ctx = {
-    state: {},
-    session: { userId: _id, sessionId },
-    auditLog: noopLog,
-  } as any
+  const c = makeMockCtx({ session: { userId: _id, sessionId } })
 
   let nextCalled = false
-  await authnMiddleware.adminRequire(ctx, async () => { nextCalled = true })
+  await authnMiddleware.adminRequire(c, async () => { nextCalled = true })
   t.true(nextCalled)
 })
 
 // ─── rootRequire ───────────────────────────────────────────────────────────
 
 test('rootRequire (no session)', async (t) => {
-  const ctx = { state: {}, session: {}, throw: throwError, auditLog: noopLog } as any
+  const c = makeMockCtx()
 
-  await t.throwsAsync(
-    async () => authnMiddleware.rootRequire(ctx, async () => { }),
-    { message: parseError(...ERR_LOGIN_REQUIRE) },
+  const err = await t.throwsAsync(
+    async () => authnMiddleware.rootRequire(c, async () => {}),
+    { instanceOf: HTTPException },
   )
+  t.is(err?.status, ERR_LOGIN_REQUIRE[0] as any)
+  t.is(err?.message, ERR_LOGIN_REQUIRE[1])
 })
 
 test('rootRequire (normal user)', async (t) => {
   const { _id } = testUsers.MauthnNormal
   const sessionId = await sessionService.createSession(_id, '127.0.0.1', 'test')
-  const ctx = {
-    state: {},
-    session: { userId: _id, sessionId },
-    throw: throwError,
-    auditLog: noopLog,
-  } as any
+  const c = makeMockCtx({ session: { userId: _id, sessionId } })
 
-  await t.throwsAsync(
-    async () => authnMiddleware.rootRequire(ctx, async () => { }),
-    { message: parseError(...ERR_PERM_DENIED) },
+  const err = await t.throwsAsync(
+    async () => authnMiddleware.rootRequire(c, async () => {}),
+    { instanceOf: HTTPException },
   )
+  t.is(err?.status, ERR_PERM_DENIED[0] as any)
+  t.is(err?.message, ERR_PERM_DENIED[1])
 })
 
 test('rootRequire (admin user)', async (t) => {
   const { _id } = testUsers.MauthnAdmin
   const sessionId = await sessionService.createSession(_id, '127.0.0.1', 'test')
-  const ctx = {
-    state: {},
-    session: { userId: _id, sessionId },
-    throw: throwError,
-    auditLog: noopLog,
-  } as any
+  const c = makeMockCtx({ session: { userId: _id, sessionId } })
 
-  await t.throwsAsync(
-    async () => authnMiddleware.rootRequire(ctx, async () => { }),
-    { message: parseError(...ERR_PERM_DENIED) },
+  const err = await t.throwsAsync(
+    async () => authnMiddleware.rootRequire(c, async () => {}),
+    { instanceOf: HTTPException },
   )
+  t.is(err?.status, ERR_PERM_DENIED[0] as any)
+  t.is(err?.message, ERR_PERM_DENIED[1])
 })
 
 test('rootRequire (root user)', async (t) => {
   const { _id } = testUsers.MauthnRoot
   const sessionId = await sessionService.createSession(_id, '127.0.0.1', 'test')
-  const ctx = {
-    state: {},
-    session: { userId: _id, sessionId },
-    auditLog: noopLog,
-  } as any
+  const c = makeMockCtx({ session: { userId: _id, sessionId } })
 
   let nextCalled = false
-  await authnMiddleware.rootRequire(ctx, async () => { nextCalled = true })
+  await authnMiddleware.rootRequire(c, async () => { nextCalled = true })
   t.true(nextCalled)
 })
